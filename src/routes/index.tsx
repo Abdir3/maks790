@@ -21,8 +21,10 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import emergencyDepartment from "@/assets/emergency-department.jpg";
+import { transcribeAudio } from "@/lib/transcribe.functions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
