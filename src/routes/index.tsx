@@ -125,7 +125,7 @@ function Brand() {
         </svg>
       </div>
       <div className="min-w-0">
-        <div className="truncate text-sm font-bold leading-none text-foreground sm:text-base">MAKS790</div>
+        <div className="truncate text-base font-bold leading-none text-foreground sm:text-xl">MAKS790</div>
         <div className="mt-1 truncate text-[10px] text-muted-foreground sm:text-xs">Akuttmedisin</div>
       </div>
     </div>
@@ -177,8 +177,6 @@ function Landing({ onStart }: { onStart: () => void }) {
           </nav>
         </div>
       )}
-
-      <div className="hero-motto technical-label absolute top-8 left-1/2 hidden -translate-x-1/2 xl:block">Tenk. Prioriter. Handl.</div>
 
       <section className="hero-content mx-auto grid w-full max-w-[1680px] px-5 pb-10 sm:px-8 lg:grid-cols-[minmax(260px,.8fr)_minmax(500px,1.4fr)_minmax(200px,.6fr)] lg:px-14">
         <div className="hero-copy order-2 self-center pt-12 lg:order-1 lg:pt-20">

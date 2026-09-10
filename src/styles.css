@@ -187,7 +187,6 @@
   align-items: center;
 }
 
-.hero-motto { letter-spacing: 0.3em; }
 .hero-title { font-size: clamp(3rem, 5vw, 5.7rem); }
 .orbit-navigation { padding-top: clamp(1rem, 3vh, 2.5rem); padding-bottom: 2rem; }
 .exam-orbit { width: clamp(15.5rem, 25vw, 20.5rem); aspect-ratio: 1; background: color-mix(in oklab, var(--background) 78%, transparent); backdrop-filter: blur(10px); transition: transform 300ms ease; }
@@ -234,6 +233,10 @@
 @media (max-width: 420px) {
   .orbit-navigation { padding-top: 0.75rem; }
   .mode-button { max-width: 132px; }
+}
+
+@media (min-width: 1024px) and (max-aspect-ratio: 3 / 2) {
+  .hero-content { align-items: start; padding-top: 3vh; }
 }
 
 @media (prefers-reduced-motion: reduce) {
