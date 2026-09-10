@@ -157,7 +157,7 @@
 @utility technical-label {
   font-size: 0.625rem;
   line-height: 1.25rem;
-  letter-spacing: 0;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
   color: color-mix(in oklab, var(--foreground) 58%, transparent);
 }
@@ -176,54 +176,64 @@
 
 .landing-shade {
   background:
-    linear-gradient(90deg, color-mix(in oklab, var(--background) 96%, transparent) 0%, color-mix(in oklab, var(--background) 68%, transparent) 38%, color-mix(in oklab, var(--background) 62%, transparent) 68%, color-mix(in oklab, var(--background) 88%, transparent) 100%),
-    linear-gradient(0deg, var(--background) 0%, transparent 42%, color-mix(in oklab, var(--background) 42%, transparent) 100%);
+    radial-gradient(circle at 54% 40%, color-mix(in oklab, var(--primary) 9%, transparent), transparent 34%),
+    radial-gradient(ellipse at center, transparent 35%, color-mix(in oklab, var(--background) 72%, transparent) 100%),
+    linear-gradient(90deg, color-mix(in oklab, var(--background) 91%, transparent) 0%, color-mix(in oklab, var(--background) 55%, transparent) 45%, color-mix(in oklab, var(--background) 78%, transparent) 100%),
+    linear-gradient(0deg, color-mix(in oklab, var(--background) 92%, transparent) 0%, transparent 55%, color-mix(in oklab, var(--background) 42%, transparent) 100%);
 }
 
-.clinical-grid {
-  background-image: linear-gradient(color-mix(in oklab, var(--primary) 11%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklab, var(--primary) 9%, transparent) 1px, transparent 1px);
-  background-size: 80px 80px;
-  mask-image: radial-gradient(circle at 50% 45%, black, transparent 68%);
+.hero-content {
+  min-height: calc(100dvh - 106px);
+  align-items: center;
 }
 
-.exam-orbit::before,
-.exam-orbit::after {
-  content: "";
+.hero-motto { letter-spacing: 0.3em; }
+.hero-title { font-size: clamp(3rem, 5vw, 5.7rem); }
+.orbit-navigation { padding-top: clamp(1rem, 3vh, 2.5rem); padding-bottom: 2rem; }
+.exam-orbit { width: clamp(15.5rem, 25vw, 20.5rem); aspect-ratio: 1; background: color-mix(in oklab, var(--background) 78%, transparent); backdrop-filter: blur(10px); transition: transform 300ms ease; }
+.exam-orbit:hover { transform: scale(1.015); }
+.orbit-ring {
   position: absolute;
-  border-radius: 999px;
-  border: 1px solid color-mix(in oklab, var(--primary) 35%, transparent);
+  inset: 0;
+  border-radius: 50%;
   pointer-events: none;
 }
-
-.exam-orbit::before { inset: -1.25rem; animation: orbit-pulse 3s ease-in-out infinite; }
-.exam-orbit::after { inset: -2.4rem; border-color: color-mix(in oklab, var(--secondary) 20%, transparent); }
+.orbit-ring-inner { inset: 0.75rem; border: 2px solid color-mix(in oklab, var(--primary) 80%, transparent); box-shadow: var(--shadow-clinical); animation: orbit-pulse 4s ease-in-out infinite; }
+.orbit-ring-middle { inset: -0.8rem; border: 1px solid color-mix(in oklab, var(--primary) 44%, transparent); }
+.orbit-ring-outer { inset: -2rem; border: 1px solid color-mix(in oklab, var(--secondary) 26%, transparent); }
+.orbit-connectors { width: min(100%, 520px); height: clamp(72px, 10vh, 105px); margin-top: -1px; margin-bottom: -1.6rem; }
+.orbit-connectors svg { width: 100%; height: 100%; overflow: visible; fill: none; stroke: color-mix(in oklab, var(--secondary) 70%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.orbit-connectors circle { fill: var(--primary); stroke: none; filter: drop-shadow(0 0 5px var(--primary)); }
 .mode-button { border-radius: 999px; transition: border-color 220ms ease, transform 220ms ease, background-color 220ms ease; }
 .mode-button:hover { border-color: color-mix(in oklab, var(--primary) 60%, transparent); transform: translateY(-2px); background-color: color-mix(in oklab, var(--background) 80%, var(--primary) 4%); }
-.practice-branch { position: relative; }
-.practice-branch::before {
-  content: "";
-  position: absolute;
-  left: 18%;
-  right: 18%;
-  top: -1.2rem;
-  height: 1.2rem;
-  border-left: 1px solid color-mix(in oklab, var(--secondary) 55%, transparent);
-  border-right: 1px solid color-mix(in oklab, var(--secondary) 55%, transparent);
-  border-top: 1px solid color-mix(in oklab, var(--secondary) 45%, transparent);
-  border-radius: 1rem 1rem 0 0;
-}
+.philosophy-line { letter-spacing: 0.28em; }
+.philosophy-line span { width: 3.75rem; height: 1.25rem; border-top: 1px solid color-mix(in oklab, var(--secondary) 75%, transparent); border-radius: 70% 0 0 0; }
 .brand-pulse { filter: drop-shadow(0 0 7px color-mix(in oklab, var(--primary) 62%, transparent)); }
 .recording-dot { animation: recording 1.2s ease-out infinite; }
 
 @keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes reveal { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes orbit-pulse { 0%, 100% { transform: scale(0.97); opacity: 0.45; } 50% { transform: scale(1.04); opacity: 0.9; } }
+@keyframes orbit-pulse { 0%, 100% { opacity: 0.72; box-shadow: 0 0 18px color-mix(in oklab, var(--primary) 25%, transparent), 0 0 50px color-mix(in oklab, var(--primary) 10%, transparent); } 50% { opacity: 1; box-shadow: 0 0 22px color-mix(in oklab, var(--primary) 34%, transparent), 0 0 58px color-mix(in oklab, var(--primary) 14%, transparent); } }
 @keyframes recording { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 65%, transparent); } 100% { box-shadow: 0 0 0 9px transparent; } }
 
 @media (max-width: 1023px) {
+  .landing-shell { overflow-y: auto; }
   .landing-shade {
-    background: linear-gradient(0deg, var(--background) 0%, color-mix(in oklab, var(--background) 72%, transparent) 54%, color-mix(in oklab, var(--background) 78%, transparent) 100%);
+    background: radial-gradient(circle at 50% 35%, color-mix(in oklab, var(--primary) 8%, transparent), transparent 35%), linear-gradient(0deg, color-mix(in oklab, var(--background) 94%, transparent) 0%, color-mix(in oklab, var(--background) 72%, transparent) 54%, color-mix(in oklab, var(--background) 78%, transparent) 100%);
   }
+  .hero-content { min-height: calc(100dvh - 76px); align-items: start; }
+  .hero-copy { display: none; }
+  .orbit-navigation { padding-top: 1.4rem; }
+  .exam-orbit { width: clamp(12rem, 54vw, 13.75rem); }
+  .orbit-ring-outer { inset: -1rem; }
+  .orbit-ring-middle { inset: -0.4rem; }
+  .orbit-ring-inner { inset: 0.55rem; }
+  .orbit-connectors { height: 58px; width: min(100%, 410px); margin-bottom: -0.8rem; }
+}
+
+@media (max-width: 420px) {
+  .orbit-navigation { padding-top: 0.75rem; }
+  .mode-button { max-width: 132px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

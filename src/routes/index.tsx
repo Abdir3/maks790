@@ -21,7 +21,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import emergencyDepartment from "@/assets/emergency-department.jpg";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -228,7 +228,7 @@ function Landing({ onStart }: { onStart: () => void }) {
   );
 }
 
-function OrbitButton({ icon: Icon, title, variant, onClick }: { icon: typeof Brain; title: React.ReactNode; variant: "primary"; onClick: () => void }) {
+function OrbitButton({ icon: Icon, title, variant, onClick }: { icon: typeof Brain; title: ReactNode; variant: "primary"; onClick: () => void }) {
   return (
     <Button type="button" variant="bare" size="free" onClick={onClick} className={`exam-orbit ${variant} group relative z-20 grid place-items-center rounded-full text-foreground`} aria-label="Start eksamen">
       <span className="orbit-ring orbit-ring-outer" />
@@ -245,7 +245,7 @@ function OrbitButton({ icon: Icon, title, variant, onClick }: { icon: typeof Bra
   );
 }
 
-function ModeButton({ icon: Icon, title, detail, time, onClick }: { icon: typeof Brain; title: React.ReactNode; detail: React.ReactNode; time: string; onClick: () => void }) {
+function ModeButton({ icon: Icon, title, detail, time, onClick }: { icon: typeof Brain; title: ReactNode; detail: ReactNode; time: string; onClick: () => void }) {
   return (
     <div className="flex min-w-0 flex-col items-center">
       <Button type="button" variant="bare" size="free" onClick={onClick} className="mode-button group flex aspect-square w-full max-w-[145px] min-w-0 flex-col whitespace-normal border border-border bg-background/60 px-3 text-center backdrop-blur-md sm:max-w-[175px]">
