@@ -199,6 +199,19 @@
 .exam-orbit::after { inset: -2.4rem; border-color: color-mix(in oklab, var(--secondary) 20%, transparent); }
 .mode-button { border-radius: 999px; transition: border-color 220ms ease, transform 220ms ease, background-color 220ms ease; }
 .mode-button:hover { border-color: color-mix(in oklab, var(--primary) 60%, transparent); transform: translateY(-2px); background-color: color-mix(in oklab, var(--background) 80%, var(--primary) 4%); }
+.practice-branch { position: relative; }
+.practice-branch::before {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  top: -1.2rem;
+  height: 1.2rem;
+  border-left: 1px solid color-mix(in oklab, var(--secondary) 55%, transparent);
+  border-right: 1px solid color-mix(in oklab, var(--secondary) 55%, transparent);
+  border-top: 1px solid color-mix(in oklab, var(--secondary) 45%, transparent);
+  border-radius: 1rem 1rem 0 0;
+}
 .brand-pulse { filter: drop-shadow(0 0 7px color-mix(in oklab, var(--primary) 62%, transparent)); }
 .recording-dot { animation: recording 1.2s ease-out infinite; }
 

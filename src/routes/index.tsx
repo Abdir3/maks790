@@ -201,7 +201,7 @@ function Landing({ onStart }: { onStart: () => void }) {
             </span>
           </Button>
 
-          <div className="mt-8 grid w-full max-w-xl grid-cols-2 gap-4">
+          <div className="practice-branch mt-5 grid w-full max-w-md grid-cols-2 gap-8">
             <ModeButton icon={Lightbulb} title="Kort repetisjon" detail="Få opp de viktigste prinsippene" time="10–15 min" onClick={onStart} />
             <ModeButton icon={FileText} title="Lang repetisjon" detail="Gå dypere, systematisk gjennom fagområder" time="30–60 min" onClick={onStart} />
           </div>
@@ -238,11 +238,11 @@ function Landing({ onStart }: { onStart: () => void }) {
 
 function ModeButton({ icon: Icon, title, detail, time, onClick }: { icon: typeof Brain; title: string; detail: string; time: string; onClick: () => void }) {
   return (
-    <Button type="button" variant="bare" size="free" onClick={onClick} className="mode-button group min-w-0 border border-border/80 bg-background/65 px-3 py-4 text-center backdrop-blur-md sm:px-5">
+    <Button type="button" variant="bare" size="free" onClick={onClick} className="mode-button group mx-auto flex aspect-square w-full max-w-40 min-w-0 flex-col whitespace-normal border border-border/80 bg-background/65 px-4 py-4 text-center backdrop-blur-md">
       <Icon className="mx-auto size-6 text-secondary transition-transform group-hover:-translate-y-0.5" strokeWidth={1.5} />
-      <span className="mt-3 block text-sm font-semibold sm:text-base">{title}</span>
-      <span className="mt-1 block text-xs text-muted-foreground">{detail}</span>
-      <span className="technical-label mt-3 block">{time}</span>
+      <span className="mt-2 block text-sm font-semibold leading-4 sm:text-base">{title}</span>
+      <span className="mt-1 block text-[10px] leading-4 text-muted-foreground">{detail}</span>
+      <span className="technical-label mt-2 block">{time}</span>
     </Button>
   );
 }
@@ -330,8 +330,8 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
       </header>
 
       <div className="mx-auto grid max-w-[1500px] gap-0 lg:grid-cols-[minmax(0,1.12fr)_minmax(370px,0.88fr)]">
-        <section className="min-w-0 px-4 py-6 sm:px-7 lg:border-r lg:border-border/70 lg:px-10 lg:py-9">
-          <div className="mb-7 flex items-start justify-between gap-4">
+        <section className="min-w-0 px-4 py-4 sm:px-7 sm:py-6 lg:border-r lg:border-border/70 lg:px-10 lg:py-9">
+          <div className="mb-5 flex items-start justify-between gap-4 sm:mb-7">
             <div className="min-w-0">
               <div className="mb-2 flex items-center gap-2 text-xs text-secondary"><Activity className="size-4" /> Case presentation</div>
               <h1 className="text-2xl font-semibold sm:text-3xl">Akutt pustevansker</h1>
@@ -340,14 +340,14 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
             <span className="shrink-0 rounded-full border border-primary/45 bg-primary/10 px-3 py-1.5 text-[10px] font-semibold text-primary">Indremedisin</span>
           </div>
 
-          <div className="patient-story relative border border-border bg-card p-5 sm:p-6">
+          <div className="patient-story relative border border-border bg-card p-4 sm:p-6">
             <div className="absolute left-0 top-5 h-10 w-px bg-secondary" />
-            <p className="text-sm leading-7 text-foreground/82 sm:text-base">
+            <p className="text-xs leading-5 text-foreground/82 sm:text-base sm:leading-7">
               En 68 år gammel mann kommer til legevakt med akutt oppstått pustevansker de siste to timene. Han er urolig, svett og klager på trykk i brystet. Tidligere kjent med hypertensjon og atrieflimmer. Fast medikasjon: apiksaban, metoprolol og atorvastatin.
             </p>
           </div>
 
-          <div className="mt-7 flex items-center justify-between">
+          <div className="mt-5 flex items-center justify-between sm:mt-7">
             <div className="flex items-center gap-2"><HeartPulse className="size-5 text-primary" /><h2 className="text-sm font-semibold">Vitalparametere</h2></div>
             <span className="flex items-center gap-1 text-xs text-muted-foreground"><Clock3 className="size-3" />09:32</span>
           </div>
@@ -424,11 +424,11 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
 function Vital({ icon: Icon, label, value, unit, tone }: { icon: typeof Activity; label: string; value: string; unit: string; tone: "critical" | "warm" | "calm" }) {
   const toneClass = tone === "critical" ? "text-primary" : tone === "warm" ? "text-secondary" : "text-success";
   return (
-    <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-3 border border-border bg-card p-3">
+    <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-2 border border-border bg-card p-2.5 sm:gap-3 sm:p-3">
       <Icon className={`mt-1 size-5 shrink-0 ${toneClass}`} strokeWidth={1.6} />
       <div className="min-w-0">
         <div className="truncate text-[10px] text-muted-foreground">{label}</div>
-        <div className="mt-0.5 truncate text-lg font-semibold leading-none">{value}</div>
+        <div className="mt-0.5 truncate text-base font-semibold leading-none sm:text-lg">{value}</div>
         <div className="mt-1 text-[9px] text-muted-foreground">{unit}</div>
       </div>
     </div>
