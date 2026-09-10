@@ -110,6 +110,12 @@ type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 function Index() {
   const [screen, setScreen] = useState<"landing" | "exam">("landing");
 
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      setScreen("exam");
+    }
+  }, []);
+
   if (screen === "exam") {
     return <ExamWorkspace onExit={() => setScreen("landing")} />;
   }
@@ -135,7 +141,7 @@ function Brand() {
 
 function Landing({ onStart }: { onStart: () => void }) {
   return (
-    <main className="landing-shell relative isolate min-h-dvh overflow-hidden bg-background text-foreground">
+    <main className="landing-shell relative isolate grid min-h-dvh grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-background text-foreground lg:mx-auto lg:my-[3vh] lg:h-[94vh] lg:min-h-0 lg:max-w-[calc(100vw-6vh)] lg:rounded-[1.8rem] lg:border lg:border-foreground/25 lg:shadow-2xl">
       <img
         src={emergencyDepartment}
         alt="Emergency department prepared for an acute care simulation"
@@ -160,17 +166,18 @@ function Landing({ onStart }: { onStart: () => void }) {
         </Button>
       </header>
 
-      <section className="mx-auto grid min-h-[calc(100dvh-156px)] w-full max-w-[1440px] items-center gap-10 px-5 pb-28 pt-5 sm:px-10 lg:grid-cols-[minmax(260px,0.72fr)_minmax(390px,1fr)_minmax(220px,0.62fr)] lg:px-14 lg:pb-28 lg:pt-0">
+      <section className="mx-auto grid min-h-0 w-full max-w-[1440px] items-center gap-5 px-5 py-4 sm:px-10 lg:grid-cols-[minmax(260px,0.72fr)_minmax(390px,1fr)_minmax(220px,0.62fr)] lg:px-14 lg:py-0">
         <div className="order-2 max-w-md animate-rise lg:order-1">
           <div className="mb-5 h-px w-12 bg-primary" />
-          <h1 className="text-balance text-4xl font-semibold leading-[1.05] sm:text-5xl lg:text-6xl">
-            Practise as<br />you’ll be tested.
+          <h1 className="text-balance text-4xl font-semibold leading-[1.02] sm:text-5xl lg:text-[3.8rem]">
+            Øv som<br />på eksamen
           </h1>
           <p className="mt-5 max-w-sm text-sm leading-6 text-foreground/74 sm:text-base">
-            Realistic cases. Clear feedback. Stronger clinical decisions.
+            Reelle situasjoner. Tydelig tilbakemelding.<br />Bedre beslutninger.
           </p>
-          <blockquote className="mt-10 border-l border-primary/80 pl-4 text-lg italic text-foreground/80">
-            “Safer decisions begin before the shift.”
+          <div className="technical-label mt-8">Akuttmedisin gjør en forskjell</div>
+          <blockquote className="mt-8 max-w-[15rem] border-l border-primary/80 pl-4 text-lg italic leading-6 text-foreground/80">
+            “Tryggere leger<br />redder flere liv.”
           </blockquote>
         </div>
 
@@ -187,42 +194,42 @@ function Landing({ onStart }: { onStart: () => void }) {
             <span className="absolute inset-8 rounded-full border border-primary/70" />
             <span className="relative flex flex-col items-center">
               <Brain className="mb-4 size-10 stroke-primary/90 sm:size-12" strokeWidth={1.3} />
-              <span className="text-2xl font-semibold sm:text-3xl">Start exam</span>
+              <span className="text-2xl font-semibold sm:text-3xl">Start<br />eksamen</span>
               <span className="mt-4 grid size-11 place-items-center rounded-full bg-foreground text-background transition-transform duration-300 group-hover:translate-x-1">
                 <ArrowRight className="size-5" />
               </span>
             </span>
           </Button>
 
-          <div className="mt-8 grid w-full max-w-xl grid-cols-2 gap-4">
-            <ModeButton icon={Lightbulb} title="Short practice" detail="Key principles" time="10–15 min" onClick={onStart} />
-            <ModeButton icon={FileText} title="Long practice" detail="Full case" time="30–60 min" onClick={onStart} />
+          <div className="practice-branch mt-5 grid w-full max-w-md grid-cols-2 gap-8">
+            <ModeButton icon={Lightbulb} title="Kort repetisjon" detail="Få opp de viktigste prinsippene" time="10–15 min" onClick={onStart} />
+            <ModeButton icon={FileText} title="Lang repetisjon" detail="Gå dypere, systematisk gjennom fagområder" time="30–60 min" onClick={onStart} />
           </div>
           <div className="mt-7 flex items-center gap-3 text-center">
             <span className="h-px w-10 bg-border" />
-            <span className="technical-label">One aim — better clinical reasoning</span>
+            <span className="technical-label">Til samme mål — bedre klinisk resonnering</span>
             <span className="h-px w-10 bg-border" />
           </div>
         </div>
 
         <div className="order-3 hidden justify-self-end lg:block">
           <p className="technical-label max-w-[15rem] text-base leading-8">
-            Same uncertainty.<br />Better preparation.
+            Samme<br />usikkerhet.<br />Bedre<br />forberedelse.
           </p>
           <div className="mt-10 space-y-4 text-xs uppercase text-foreground/65">
-            {['Knowledge', 'Judgement', 'Action'].map((item) => (
+            {['Kunnskap', 'Vurdering', 'Handlingskraft'].map((item) => (
               <div key={item} className="flex items-center gap-3"><span className="h-px w-7 bg-secondary" />{item}</div>
             ))}
           </div>
         </div>
       </section>
 
-      <div className="absolute inset-x-0 bottom-0 border-t border-border/60 bg-background/75 backdrop-blur-lg">
+      <div className="border-t border-border/60 bg-background/75 backdrop-blur-lg">
         <div className="mx-auto grid max-w-[1440px] grid-cols-2 divide-x divide-border/50 px-4 py-4 sm:grid-cols-4 sm:px-10">
-          <Feature icon={FileText} label="Varied acute cases" />
-          <Feature icon={Brain} label="Reasoning feedback" />
-          <Feature icon={Users} label="Designed for clinicians" />
-          <Feature icon={MonitorSmartphone} label="Practise anywhere" />
+          <Feature icon={FileText} label="Varierte akuttscenarioer" />
+          <Feature icon={Brain} label="AI-drevet tilbakemelding" />
+          <Feature icon={Users} label="Bygget for leger" />
+          <Feature icon={MonitorSmartphone} label="Når som helst, hvor som helst" />
         </div>
       </div>
     </main>
@@ -231,11 +238,11 @@ function Landing({ onStart }: { onStart: () => void }) {
 
 function ModeButton({ icon: Icon, title, detail, time, onClick }: { icon: typeof Brain; title: string; detail: string; time: string; onClick: () => void }) {
   return (
-    <Button type="button" variant="bare" size="free" onClick={onClick} className="mode-button group min-w-0 border border-border/80 bg-background/65 px-3 py-4 text-center backdrop-blur-md sm:px-5">
+    <Button type="button" variant="bare" size="free" onClick={onClick} className="mode-button group mx-auto flex aspect-square w-full max-w-40 min-w-0 flex-col whitespace-normal border border-border/80 bg-background/65 px-4 py-4 text-center backdrop-blur-md">
       <Icon className="mx-auto size-6 text-secondary transition-transform group-hover:-translate-y-0.5" strokeWidth={1.5} />
-      <span className="mt-3 block text-sm font-semibold sm:text-base">{title}</span>
-      <span className="mt-1 block text-xs text-muted-foreground">{detail}</span>
-      <span className="technical-label mt-3 block">{time}</span>
+      <span className="mt-2 block text-sm font-semibold leading-4 sm:text-base">{title}</span>
+      <span className="mt-1 block text-[10px] leading-4 text-muted-foreground">{detail}</span>
+      <span className="technical-label mt-2 block">{time}</span>
     </Button>
   );
 }
@@ -305,14 +312,14 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
           <Brand />
           <div className="flex shrink-0 items-center gap-2">
             <div className="hidden text-right sm:block">
-              <div className="text-xs font-medium">Case 3 of 6</div>
-              <div className="text-[10px] text-muted-foreground">Acute medicine</div>
+              <div className="text-xs font-medium">Case 3 av 6</div>
+              <div className="text-[10px] text-muted-foreground">Akuttmedisin</div>
             </div>
             <Button variant="ghost" size="icon" onClick={onExit} aria-label="Close case"><X /></Button>
           </div>
         </div>
         <div className="mx-auto flex max-w-[1500px] items-center gap-3 px-4 pb-4 sm:px-7">
-          <span className="text-xs text-muted-foreground">{stage + 1}/{stages.length}</span>
+          <span className="text-xs text-muted-foreground">Case 3 av 6</span>
           <div className="grid flex-1 grid-cols-6 gap-1.5">
             {stages.map((item, index) => (
               <Button key={item} type="button" variant="bare" size="free" onClick={() => setStage(index)} aria-label={item} className={`h-1 w-full rounded-full transition-colors ${index <= stage ? "bg-primary" : "bg-muted"}`} />
@@ -323,25 +330,25 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
       </header>
 
       <div className="mx-auto grid max-w-[1500px] gap-0 lg:grid-cols-[minmax(0,1.12fr)_minmax(370px,0.88fr)]">
-        <section className="min-w-0 px-4 py-6 sm:px-7 lg:border-r lg:border-border/70 lg:px-10 lg:py-9">
-          <div className="mb-7 flex items-start justify-between gap-4">
+        <section className="min-w-0 px-4 py-4 sm:px-7 sm:py-6 lg:border-r lg:border-border/70 lg:px-10 lg:py-9">
+          <div className="mb-5 flex items-start justify-between gap-4 sm:mb-7">
             <div className="min-w-0">
               <div className="mb-2 flex items-center gap-2 text-xs text-secondary"><Activity className="size-4" /> Case presentation</div>
-              <h1 className="text-2xl font-semibold sm:text-3xl">Acute shortness of breath</h1>
-              <p className="mt-1 text-sm text-muted-foreground">68-year-old man</p>
+              <h1 className="text-2xl font-semibold sm:text-3xl">Akutt pustevansker</h1>
+              <p className="mt-1 text-sm text-muted-foreground">68 år gammel mann</p>
             </div>
-            <span className="shrink-0 rounded-full border border-primary/45 bg-primary/10 px-3 py-1.5 text-[10px] font-semibold uppercase text-primary">Emergency</span>
+            <span className="shrink-0 rounded-full border border-primary/45 bg-primary/10 px-3 py-1.5 text-[10px] font-semibold text-primary">Indremedisin</span>
           </div>
 
-          <div className="patient-story relative border border-border bg-card p-5 sm:p-6">
+          <div className="patient-story relative border border-border bg-card p-4 sm:p-6">
             <div className="absolute left-0 top-5 h-10 w-px bg-secondary" />
-            <p className="text-sm leading-7 text-foreground/82 sm:text-base">
-              A 68-year-old man arrives at the emergency department with rapidly worsening shortness of breath over the last two hours. He is anxious, diaphoretic, and reports a heavy pressure in his chest. His history includes hypertension and atrial fibrillation. Regular medication: apixaban, metoprolol, and atorvastatin.
+            <p className="text-xs leading-5 text-foreground/82 sm:text-base sm:leading-7">
+              En 68 år gammel mann kommer til legevakt med akutt oppstått pustevansker de siste to timene. Han er urolig, svett og klager på trykk i brystet. Tidligere kjent med hypertensjon og atrieflimmer. Fast medikasjon: apiksaban, metoprolol og atorvastatin.
             </p>
           </div>
 
-          <div className="mt-7 flex items-center justify-between">
-            <div className="flex items-center gap-2"><HeartPulse className="size-5 text-primary" /><h2 className="text-sm font-semibold">Vital parameters</h2></div>
+          <div className="mt-5 flex items-center justify-between sm:mt-7">
+            <div className="flex items-center gap-2"><HeartPulse className="size-5 text-primary" /><h2 className="text-sm font-semibold">Vitalparametere</h2></div>
             <span className="flex items-center gap-1 text-xs text-muted-foreground"><Clock3 className="size-3" />09:32</span>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -417,11 +424,11 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
 function Vital({ icon: Icon, label, value, unit, tone }: { icon: typeof Activity; label: string; value: string; unit: string; tone: "critical" | "warm" | "calm" }) {
   const toneClass = tone === "critical" ? "text-primary" : tone === "warm" ? "text-secondary" : "text-success";
   return (
-    <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-3 border border-border bg-card p-3">
+    <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-2 border border-border bg-card p-2.5 sm:gap-3 sm:p-3">
       <Icon className={`mt-1 size-5 shrink-0 ${toneClass}`} strokeWidth={1.6} />
       <div className="min-w-0">
         <div className="truncate text-[10px] text-muted-foreground">{label}</div>
-        <div className="mt-0.5 truncate text-lg font-semibold leading-none">{value}</div>
+        <div className="mt-0.5 truncate text-base font-semibold leading-none sm:text-lg">{value}</div>
         <div className="mt-1 text-[9px] text-muted-foreground">{unit}</div>
       </div>
     </div>
