@@ -256,45 +256,60 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
   const [answer, setAnswer] = useState("");
   const [openSection, setOpenSection] = useState(0);
   const [listening, setListening] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [speechMessage, setSpeechMessage] = useState("");
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const transcribe = useServerFn(transcribeAudio);
 
-  useEffect(() => () => recognitionRef.current?.stop(), []);
+  useEffect(() => () => {
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+  }, []);
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     if (listening) {
-      recognitionRef.current?.stop();
+      recorderRef.current?.stop();
       setListening(false);
       return;
     }
 
-    const browserWindow = window as typeof window & {
-      SpeechRecognition?: SpeechRecognitionConstructor;
-      webkitSpeechRecognition?: SpeechRecognitionConstructor;
-    };
-    const Recognition = browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition;
-    if (!Recognition) {
-      setSpeechMessage("Voice input is not supported in this browser. You can keep typing below.");
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setSpeechMessage("Diktering støttes ikke i denne nettleseren. Du kan skrive svaret ditt.");
       return;
     }
 
-    const recognition = new Recognition();
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.lang = "en-GB";
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results).map((result) => result[0].transcript).join(" ");
-      setAnswer((current) => `${current}${current ? " " : ""}${transcript}`);
-    };
-    recognition.onend = () => setListening(false);
-    recognition.onerror = () => {
-      setListening(false);
-      setSpeechMessage("Voice input stopped. Check microphone access or continue typing.");
-    };
-    recognitionRef.current = recognition;
-    recognition.start();
-    setSpeechMessage("");
-    setListening(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        if (blob.size === 0) return;
+        setTranscribing(true);
+        try {
+          const base64 = await blobToBase64(blob);
+          const result = await transcribe({
+            data: { audio: base64, mimeType: blob.type, languageCode: "nor" },
+          });
+          const text = result.text.trim();
+          if (text) setAnswer((current) => `${current}${current ? " " : ""}${text}`);
+          else setSpeechMessage("Fikk ikke med noe lyd. Prøv igjen.");
+        } catch {
+          setSpeechMessage("Transkriberingen feilet. Prøv igjen eller skriv svaret.");
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      setSpeechMessage("");
+      setListening(true);
+    } catch {
+      setSpeechMessage("Fikk ikke tilgang til mikrofonen. Sjekk tillatelser i nettleseren.");
+    }
   };
 
   const next = () => setStage((value) => Math.min(value + 1, stages.length - 1));
