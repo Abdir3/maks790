@@ -397,7 +397,7 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
                 <div className="technical-label text-secondary">Your response</div>
                 <h2 className="mt-2 text-xl font-semibold">What would you do next?</h2>
               </div>
-              <Button variant={listening ? "default" : "outline"} size="icon" onClick={toggleListening} aria-label={listening ? "Stop voice input" : "Start voice input"} title={listening ? "Stop voice input" : "Start voice input"}>
+              <Button variant={listening ? "default" : "outline"} size="icon" disabled={transcribing} onClick={toggleListening} aria-label={listening ? "Stopp diktering" : "Start diktering"} title={listening ? "Stopp diktering" : "Start diktering"}>
                 {listening ? <Pause /> : <Mic />}
               </Button>
             </div>
