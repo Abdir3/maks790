@@ -21,8 +21,10 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import emergencyDepartment from "@/assets/emergency-department.jpg";
+import { transcribeAudio } from "@/lib/transcribe.functions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -89,22 +91,17 @@ const caseSections = [
   },
 ];
 
-type SpeechRecognitionEventLike = Event & {
-  results: ArrayLike<{ 0: { transcript: string } }>;
-};
-
-type SpeechRecognitionLike = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onend: (() => void) | null;
-  onerror: (() => void) | null;
-};
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+function blobToBase64(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Kunne ikke lese lydopptaket."));
+    reader.onload = () => {
+      const result = String(reader.result);
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.readAsDataURL(blob);
+  });
+}
 
 function Index() {
   const [screen, setScreen] = useState<"landing" | "exam">("landing");
@@ -261,45 +258,60 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
   const [answer, setAnswer] = useState("");
   const [openSection, setOpenSection] = useState(0);
   const [listening, setListening] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [speechMessage, setSpeechMessage] = useState("");
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const transcribe = useServerFn(transcribeAudio);
 
-  useEffect(() => () => recognitionRef.current?.stop(), []);
+  useEffect(() => () => {
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+  }, []);
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     if (listening) {
-      recognitionRef.current?.stop();
+      recorderRef.current?.stop();
       setListening(false);
       return;
     }
 
-    const browserWindow = window as typeof window & {
-      SpeechRecognition?: SpeechRecognitionConstructor;
-      webkitSpeechRecognition?: SpeechRecognitionConstructor;
-    };
-    const Recognition = browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition;
-    if (!Recognition) {
-      setSpeechMessage("Voice input is not supported in this browser. You can keep typing below.");
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setSpeechMessage("Diktering støttes ikke i denne nettleseren. Du kan skrive svaret ditt.");
       return;
     }
 
-    const recognition = new Recognition();
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.lang = "en-GB";
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results).map((result) => result[0].transcript).join(" ");
-      setAnswer((current) => `${current}${current ? " " : ""}${transcript}`);
-    };
-    recognition.onend = () => setListening(false);
-    recognition.onerror = () => {
-      setListening(false);
-      setSpeechMessage("Voice input stopped. Check microphone access or continue typing.");
-    };
-    recognitionRef.current = recognition;
-    recognition.start();
-    setSpeechMessage("");
-    setListening(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        if (blob.size === 0) return;
+        setTranscribing(true);
+        try {
+          const base64 = await blobToBase64(blob);
+          const result = await transcribe({
+            data: { audio: base64, mimeType: blob.type, languageCode: "nor" },
+          });
+          const text = result.text.trim();
+          if (text) setAnswer((current) => `${current}${current ? " " : ""}${text}`);
+          else setSpeechMessage("Fikk ikke med noe lyd. Prøv igjen.");
+        } catch {
+          setSpeechMessage("Transkriberingen feilet. Prøv igjen eller skriv svaret.");
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      setSpeechMessage("");
+      setListening(true);
+    } catch {
+      setSpeechMessage("Fikk ikke tilgang til mikrofonen. Sjekk tillatelser i nettleseren.");
+    }
   };
 
   const next = () => setStage((value) => Math.min(value + 1, stages.length - 1));
@@ -385,7 +397,7 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
                 <div className="technical-label text-secondary">Your response</div>
                 <h2 className="mt-2 text-xl font-semibold">What would you do next?</h2>
               </div>
-              <Button variant={listening ? "default" : "outline"} size="icon" onClick={toggleListening} aria-label={listening ? "Stop voice input" : "Start voice input"} title={listening ? "Stop voice input" : "Start voice input"}>
+              <Button variant={listening ? "default" : "outline"} size="icon" disabled={transcribing} onClick={toggleListening} aria-label={listening ? "Stopp diktering" : "Start diktering"} title={listening ? "Stopp diktering" : "Start diktering"}>
                 {listening ? <Pause /> : <Mic />}
               </Button>
             </div>
@@ -395,7 +407,12 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
 
             {listening && (
               <div className="mt-4 flex items-center gap-3 border border-primary/40 bg-primary/8 px-4 py-3 text-xs text-primary">
-                <span className="recording-dot size-2 rounded-full bg-primary" /> Listening… speak naturally
+                <span className="recording-dot size-2 rounded-full bg-primary" /> Tar opp… snakk naturlig, trykk stopp når du er ferdig
+              </div>
+            )}
+            {transcribing && (
+              <div className="mt-4 flex items-center gap-3 border border-secondary/40 bg-secondary/10 px-4 py-3 text-xs text-secondary">
+                <span className="recording-dot size-2 rounded-full bg-secondary" /> Transkriberer opptaket…
               </div>
             )}
             {speechMessage && <p className="mt-3 text-xs leading-5 text-secondary">{speechMessage}</p>}
