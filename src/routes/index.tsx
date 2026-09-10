@@ -3,24 +3,23 @@ import {
   Activity,
   ArrowLeft,
   ArrowRight,
+  BookOpen,
   Brain,
   ChevronDown,
   ClipboardList,
   Clock3,
   FileText,
   HeartPulse,
-  Lightbulb,
   Menu,
   Mic,
-  MonitorSmartphone,
   Pause,
-  Play,
   Stethoscope,
   Thermometer,
-  Users,
+  UserRound,
   Volume2,
   Wind,
   X,
+  Zap,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import emergencyDepartment from "@/assets/emergency-department.jpg";
@@ -110,12 +109,6 @@ type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 function Index() {
   const [screen, setScreen] = useState<"landing" | "exam">("landing");
 
-  useEffect(() => {
-    if (window.matchMedia("(max-width: 767px)").matches) {
-      setScreen("exam");
-    }
-  }, []);
-
   if (screen === "exam") {
     return <ExamWorkspace onExit={() => setScreen("landing")} />;
   }
@@ -133,125 +126,134 @@ function Brand() {
       </div>
       <div className="min-w-0">
         <div className="truncate text-sm font-bold leading-none text-foreground sm:text-base">MAKS790</div>
-        <div className="mt-1 truncate text-[10px] text-muted-foreground sm:text-xs">Acute medicine</div>
+        <div className="mt-1 truncate text-[10px] text-muted-foreground sm:text-xs">Akuttmedisin</div>
       </div>
     </div>
   );
 }
 
 function Landing({ onStart }: { onStart: () => void }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
-    <main className="landing-shell relative isolate grid min-h-dvh grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-background text-foreground lg:mx-auto lg:my-[3vh] lg:h-[94vh] lg:min-h-0 lg:max-w-[calc(100vw-6vh)] lg:rounded-[1.8rem] lg:border lg:border-foreground/25 lg:shadow-2xl">
+    <main className="landing-shell relative isolate min-h-dvh overflow-hidden bg-background text-foreground lg:h-dvh lg:min-h-0 lg:border lg:border-foreground/25 lg:rounded-[1.25rem]">
       <img
         src={emergencyDepartment}
         alt="Emergency department prepared for an acute care simulation"
         width={1920}
         height={1080}
-        className="absolute inset-0 -z-30 h-full w-full object-cover object-[64%_center]"
+        className="absolute inset-0 -z-30 h-full w-full object-cover object-[62%_center]"
       />
       <div className="landing-shade absolute inset-0 -z-20" />
-      <div className="clinical-grid absolute inset-0 -z-10 opacity-20" />
 
-      <header className="mx-auto grid w-full max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-5 sm:px-10 lg:px-14 lg:py-8">
+      <header className="relative z-40 mx-auto grid w-full max-w-[1680px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-5 sm:px-8 lg:grid-cols-[1fr_auto_1fr] lg:px-14 lg:py-7">
         <Brand />
-        <div className="hidden items-center gap-8 md:flex">
-          <span className="technical-label">Think. Prioritise. Act.</span>
-          <span className="text-xs text-foreground/70">As in real life. Only better.</span>
-          <Button variant="ghost" size="icon" aria-label="Open profile">
-            <Users />
+        <nav className="hidden items-center gap-12 text-sm text-foreground/80 lg:flex" aria-label="Hovedmeny">
+          <a className="story-link" href="#om">Om</a>
+          <a className="story-link" href="#fagomrader">Fagområder</a>
+          <a className="story-link" href="#slik-fungerer-det">Slik fungerer det</a>
+          <a className="story-link" href="#faq">FAQ</a>
+        </nav>
+        <div className="flex shrink-0 justify-self-end items-center gap-4">
+          <Button variant="ghost" size="icon" className="hidden lg:inline-flex" aria-label="Åpne profil">
+            <UserRound className="size-6" strokeWidth={1.5} />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => setMenuOpen(true)} aria-label="Åpne meny">
+            <Menu className="size-7" strokeWidth={1.5} />
           </Button>
         </div>
-        <Button variant="outline" size="icon" className="md:hidden" aria-label="Open menu">
-          <Menu />
-        </Button>
       </header>
 
-      <section className="mx-auto grid min-h-0 w-full max-w-[1440px] items-center gap-5 px-5 py-4 sm:px-10 lg:grid-cols-[minmax(260px,0.72fr)_minmax(390px,1fr)_minmax(220px,0.62fr)] lg:px-14 lg:py-0">
-        <div className="order-2 max-w-md animate-rise lg:order-1">
-          <div className="mb-5 h-px w-12 bg-primary" />
-          <h1 className="text-balance text-4xl font-semibold leading-[1.02] sm:text-5xl lg:text-[3.8rem]">
+      {menuOpen && (
+        <div className="menu-overlay fixed inset-0 z-50 flex flex-col bg-background/97 px-6 py-5 backdrop-blur-xl lg:hidden">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+            <Brand />
+            <Button variant="ghost" size="icon" onClick={() => setMenuOpen(false)} aria-label="Lukk meny"><X /></Button>
+          </div>
+          <nav className="my-auto flex flex-col items-center gap-7 text-2xl" aria-label="Mobilmeny">
+            {['Om', 'Fagområder', 'Slik fungerer det', 'FAQ', 'Profil'].map((item) => (
+              <a key={item} href={`#${item.toLowerCase().replaceAll(' ', '-')}`} onClick={() => setMenuOpen(false)}>{item}</a>
+            ))}
+          </nav>
+        </div>
+      )}
+
+      <div className="hero-motto technical-label absolute top-8 left-1/2 hidden -translate-x-1/2 xl:block">Tenk. Prioriter. Handl.</div>
+
+      <section className="hero-content mx-auto grid w-full max-w-[1680px] px-5 pb-10 sm:px-8 lg:grid-cols-[minmax(260px,.8fr)_minmax(500px,1.4fr)_minmax(200px,.6fr)] lg:px-14">
+        <div className="hero-copy order-2 self-center pt-12 lg:order-1 lg:pt-20">
+          <h1 className="hero-title font-semibold leading-[1.03]">
             Øv som<br />på eksamen
           </h1>
-          <p className="mt-5 max-w-sm text-sm leading-6 text-foreground/74 sm:text-base">
+          <p className="mt-5 max-w-sm text-sm leading-6 text-foreground/82 sm:text-base">
             Reelle situasjoner. Tydelig tilbakemelding.<br />Bedre beslutninger.
           </p>
-          <div className="technical-label mt-8">Akuttmedisin gjør en forskjell</div>
-          <blockquote className="mt-8 max-w-[15rem] border-l border-primary/80 pl-4 text-lg italic leading-6 text-foreground/80">
-            “Tryggere leger<br />redder flere liv.”
-          </blockquote>
+          <div className="mt-7 h-1 w-11 bg-primary" />
+          <div className="technical-label mt-5">Akuttmedisin gjør en forskjell</div>
         </div>
 
-        <div className="order-1 flex flex-col items-center lg:order-2">
-          <Button
-            type="button"
-            onClick={onStart}
-            variant="bare"
-            size="free"
-            className="exam-orbit group relative grid size-60 place-items-center rounded-full border border-primary/45 bg-background/75 text-foreground shadow-clinical backdrop-blur-md sm:size-72 lg:size-80"
-            aria-label="Start exam"
-          >
-            <span className="absolute inset-3 rounded-full border border-primary/25" />
-            <span className="absolute inset-8 rounded-full border border-primary/70" />
-            <span className="relative flex flex-col items-center">
-              <Brain className="mb-4 size-10 stroke-primary/90 sm:size-12" strokeWidth={1.3} />
-              <span className="text-2xl font-semibold sm:text-3xl">Start<br />eksamen</span>
-              <span className="mt-4 grid size-11 place-items-center rounded-full bg-foreground text-background transition-transform duration-300 group-hover:translate-x-1">
-                <ArrowRight className="size-5" />
-              </span>
-            </span>
-          </Button>
+        <div className="orbit-navigation order-1 relative flex min-w-0 flex-col items-center lg:order-2">
+          <OrbitButton icon={Brain} title={<>Start<br />eksamen</>} variant="primary" onClick={onStart} />
 
-          <div className="practice-branch mt-5 grid w-full max-w-md grid-cols-2 gap-8">
-            <ModeButton icon={Lightbulb} title="Kort repetisjon" detail="Få opp de viktigste prinsippene" time="10–15 min" onClick={onStart} />
-            <ModeButton icon={FileText} title="Lang repetisjon" detail="Gå dypere, systematisk gjennom fagområder" time="30–60 min" onClick={onStart} />
+          <div className="orbit-connectors" aria-hidden="true">
+            <svg viewBox="0 0 520 120" preserveAspectRatio="none">
+              <path d="M260 0 C260 52 180 22 150 82 C134 112 102 116 70 116" />
+              <path d="M260 0 C260 52 340 22 370 82 C386 112 418 116 450 116" />
+              <circle cx="70" cy="116" r="3" />
+              <circle cx="450" cy="116" r="3" />
+            </svg>
           </div>
-          <div className="mt-7 flex items-center gap-3 text-center">
-            <span className="h-px w-10 bg-border" />
-            <span className="technical-label">Til samme mål — bedre klinisk resonnering</span>
-            <span className="h-px w-10 bg-border" />
+
+          <div className="practice-branch relative z-10 grid w-full max-w-[480px] grid-cols-2 gap-3 sm:gap-10">
+            <ModeButton icon={Zap} title={<>Kort<br />repetisjon</>} detail={<>Få opp de viktigste<br />prinsippene</>} time="10–15 min" onClick={onStart} />
+            <ModeButton icon={BookOpen} title={<>Lang<br />repetisjon</>} detail={<>Gå dypere, systematisk<br />gjennom fagområder</>} time="30–60 min" onClick={onStart} />
           </div>
         </div>
 
-        <div className="order-3 hidden justify-self-end lg:block">
-          <p className="technical-label max-w-[15rem] text-base leading-8">
-            Samme<br />usikkerhet.<br />Bedre<br />forberedelse.
-          </p>
-          <div className="mt-10 space-y-4 text-xs uppercase text-foreground/65">
+        <div className="philosophy-copy order-3 hidden self-center justify-self-end lg:block">
+          <div className="space-y-5 text-[11px] uppercase text-foreground/75">
             {['Kunnskap', 'Vurdering', 'Handlingskraft'].map((item) => (
-              <div key={item} className="flex items-center gap-3"><span className="h-px w-7 bg-secondary" />{item}</div>
+              <div key={item} className="philosophy-line flex items-center gap-5"><span />{item}</div>
             ))}
           </div>
         </div>
-      </section>
 
-      <div className="border-t border-border/60 bg-background/75 backdrop-blur-lg">
-        <div className="mx-auto grid max-w-[1440px] grid-cols-2 divide-x divide-border/50 px-4 py-4 sm:grid-cols-4 sm:px-10">
-          <Feature icon={FileText} label="Varierte akuttscenarioer" />
-          <Feature icon={Brain} label="AI-drevet tilbakemelding" />
-          <Feature icon={Users} label="Bygget for leger" />
-          <Feature icon={MonitorSmartphone} label="Når som helst, hvor som helst" />
+        <div className="order-3 mt-10 text-center lg:hidden">
+          <p className="text-2xl font-semibold leading-tight sm:text-3xl">Øv som på eksamen</p>
+          <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-foreground/72">Reelle situasjoner. Tydelig tilbakemelding. Bedre beslutninger.</p>
+          <div className="technical-label mt-5">Akuttmedisin gjør en forskjell</div>
         </div>
-      </div>
+      </section>
     </main>
   );
 }
 
-function ModeButton({ icon: Icon, title, detail, time, onClick }: { icon: typeof Brain; title: string; detail: string; time: string; onClick: () => void }) {
+function OrbitButton({ icon: Icon, title, variant, onClick }: { icon: typeof Brain; title: React.ReactNode; variant: "primary"; onClick: () => void }) {
   return (
-    <Button type="button" variant="bare" size="free" onClick={onClick} className="mode-button group mx-auto flex aspect-square w-full max-w-40 min-w-0 flex-col whitespace-normal border border-border/80 bg-background/65 px-4 py-4 text-center backdrop-blur-md">
-      <Icon className="mx-auto size-6 text-secondary transition-transform group-hover:-translate-y-0.5" strokeWidth={1.5} />
-      <span className="mt-2 block text-sm font-semibold leading-4 sm:text-base">{title}</span>
-      <span className="mt-1 block text-[10px] leading-4 text-muted-foreground">{detail}</span>
-      <span className="technical-label mt-2 block">{time}</span>
+    <Button type="button" variant="bare" size="free" onClick={onClick} className={`exam-orbit ${variant} group relative z-20 grid place-items-center rounded-full text-foreground`} aria-label="Start eksamen">
+      <span className="orbit-ring orbit-ring-outer" />
+      <span className="orbit-ring orbit-ring-middle" />
+      <span className="orbit-ring orbit-ring-inner" />
+      <span className="relative flex flex-col items-center">
+        <Icon className="mb-3 size-11 text-foreground/80" strokeWidth={1.15} />
+        <span className="text-2xl font-semibold leading-tight sm:text-3xl">{title}</span>
+        <span className="mt-4 grid size-11 place-items-center rounded-full bg-foreground text-background transition-transform duration-300 group-hover:translate-x-1">
+          <ArrowRight className="size-5" />
+        </span>
+      </span>
     </Button>
   );
 }
 
-function Feature({ icon: Icon, label }: { icon: typeof Brain; label: string }) {
+function ModeButton({ icon: Icon, title, detail, time, onClick }: { icon: typeof Brain; title: React.ReactNode; detail: React.ReactNode; time: string; onClick: () => void }) {
   return (
-    <div className="flex min-w-0 items-center justify-center gap-2 px-2 py-1 text-[10px] text-foreground/70 sm:text-xs">
-      <Icon className="size-4 shrink-0 text-primary sm:size-5" strokeWidth={1.5} />
-      <span className="truncate">{label}</span>
+    <div className="flex min-w-0 flex-col items-center">
+      <Button type="button" variant="bare" size="free" onClick={onClick} className="mode-button group flex aspect-square w-full max-w-[145px] min-w-0 flex-col whitespace-normal border border-border bg-background/60 px-3 text-center backdrop-blur-md sm:max-w-[175px]">
+        <Icon className="mx-auto size-7 text-secondary transition-transform group-hover:-translate-y-0.5" strokeWidth={1.5} />
+        <span className="mt-2 block text-base font-semibold leading-5 sm:text-lg">{title}</span>
+        <span className="mt-2 block text-[9px] leading-4 text-muted-foreground sm:text-[10px]">{detail}</span>
+      </Button>
+      <span className="technical-label mt-4 block">{time}</span>
     </div>
   );
 }
