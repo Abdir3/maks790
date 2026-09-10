@@ -175,9 +175,11 @@ function Landing({ onStart }: { onStart: () => void }) {
         </div>
 
         <div className="order-1 flex flex-col items-center lg:order-2">
-          <button
+          <Button
             type="button"
             onClick={onStart}
+            variant="bare"
+            size="free"
             className="exam-orbit group relative grid size-60 place-items-center rounded-full border border-primary/45 bg-background/75 text-foreground shadow-clinical backdrop-blur-md sm:size-72 lg:size-80"
             aria-label="Start exam"
           >
@@ -190,7 +192,7 @@ function Landing({ onStart }: { onStart: () => void }) {
                 <ArrowRight className="size-5" />
               </span>
             </span>
-          </button>
+          </Button>
 
           <div className="mt-8 grid w-full max-w-xl grid-cols-2 gap-4">
             <ModeButton icon={Lightbulb} title="Short practice" detail="Key principles" time="10–15 min" onClick={onStart} />
@@ -229,12 +231,12 @@ function Landing({ onStart }: { onStart: () => void }) {
 
 function ModeButton({ icon: Icon, title, detail, time, onClick }: { icon: typeof Brain; title: string; detail: string; time: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="mode-button group min-w-0 border border-border/80 bg-background/65 px-3 py-4 text-center backdrop-blur-md sm:px-5">
+    <Button type="button" variant="bare" size="free" onClick={onClick} className="mode-button group min-w-0 border border-border/80 bg-background/65 px-3 py-4 text-center backdrop-blur-md sm:px-5">
       <Icon className="mx-auto size-6 text-secondary transition-transform group-hover:-translate-y-0.5" strokeWidth={1.5} />
       <span className="mt-3 block text-sm font-semibold sm:text-base">{title}</span>
       <span className="mt-1 block text-xs text-muted-foreground">{detail}</span>
       <span className="technical-label mt-3 block">{time}</span>
-    </button>
+    </Button>
   );
 }
 
@@ -313,7 +315,7 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
           <span className="text-xs text-muted-foreground">{stage + 1}/{stages.length}</span>
           <div className="grid flex-1 grid-cols-6 gap-1.5">
             {stages.map((item, index) => (
-              <button key={item} type="button" onClick={() => setStage(index)} aria-label={item} className={`h-1 rounded-full transition-colors ${index <= stage ? "bg-primary" : "bg-muted"}`} />
+              <Button key={item} type="button" variant="bare" size="free" onClick={() => setStage(index)} aria-label={item} className={`h-1 w-full rounded-full transition-colors ${index <= stage ? "bg-primary" : "bg-muted"}`} />
             ))}
           </div>
           <span className="technical-label hidden sm:block">{stages[stage]}</span>
@@ -357,11 +359,11 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
               const open = openSection === index;
               return (
                 <div key={section.title} className="overflow-hidden border border-border bg-card">
-                  <button type="button" onClick={() => setOpenSection(open ? -1 : index)} className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 text-left">
+                  <Button type="button" variant="bare" size="free" onClick={() => setOpenSection(open ? -1 : index)} className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 text-left">
                     <Icon className="size-4 shrink-0 text-secondary" />
                     <span className="truncate text-sm font-semibold">{section.title}</span>
                     <ChevronDown className={`size-4 transition-transform ${open ? "rotate-180" : ""}`} />
-                  </button>
+                  </Button>
                   {open && <div className="border-t border-border px-4 py-4 animate-reveal">{section.content}</div>}
                 </div>
               );
