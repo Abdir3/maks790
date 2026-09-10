@@ -407,7 +407,12 @@ function ExamWorkspace({ onExit }: { onExit: () => void }) {
 
             {listening && (
               <div className="mt-4 flex items-center gap-3 border border-primary/40 bg-primary/8 px-4 py-3 text-xs text-primary">
-                <span className="recording-dot size-2 rounded-full bg-primary" /> Listening… speak naturally
+                <span className="recording-dot size-2 rounded-full bg-primary" /> Tar opp… snakk naturlig, trykk stopp når du er ferdig
+              </div>
+            )}
+            {transcribing && (
+              <div className="mt-4 flex items-center gap-3 border border-secondary/40 bg-secondary/10 px-4 py-3 text-xs text-secondary">
+                <span className="recording-dot size-2 rounded-full bg-secondary" /> Transkriberer opptaket…
               </div>
             )}
             {speechMessage && <p className="mt-3 text-xs leading-5 text-secondary">{speechMessage}</p>}
