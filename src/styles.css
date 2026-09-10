@@ -157,7 +157,7 @@
 @utility technical-label {
   font-size: 0.625rem;
   line-height: 1.25rem;
-  letter-spacing: 0.24em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: color-mix(in oklab, var(--foreground) 58%, transparent);
 }
