@@ -4,6 +4,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* The hosting platform injects this badge outside the application root. */
+html body #lovable-badge {
+  display: none !important;
+}
+
 /*
  * Design system definition.
  *

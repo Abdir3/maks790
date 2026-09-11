@@ -181,7 +181,7 @@ export function Landing({ onStart }: { onStart: () => void }) {
       <section className="hero-content" aria-labelledby="hero-title">
         <div className="hero-copy">
           <h1 id="hero-title" className="hero-title">
-            Øv som
+            Øv som{" "}
             <br />
             på eksamen
           </h1>
