@@ -9,6 +9,8 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
+    "test": "bun test tests/case-model.test.ts",
+    "test:ui": "vite --config tests/vite.config.ts",
     "format": "prettier --write ."
   },
   "overrides": {

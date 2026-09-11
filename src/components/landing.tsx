@@ -30,26 +30,26 @@ const information = {
   fagomrader: {
     label: "Fagområder",
     title: "Akuttmedisin, steg for steg",
-    description: "Den tilgjengelige øvingscasen handler om akutte pustevansker.",
+    description: "Velg mellom fall i hjemmet og akutte pustevansker.",
     body: "Utforsk pasienthistorien, kliniske funn og tilgjengelige undersøkelser. Arbeid videre med differensialdiagnoser, behandling og refleksjon.",
   },
   "slik-fungerer-det": {
     label: "Slik fungerer det",
     title: "Les. Vurder. Forklar.",
-    description: "Start en case og jobb deg gjennom de seks trinnene i eget tempo.",
-    body: "Les presentasjonen og vitalparameterne. Skriv resonnementet ditt, eller bruk mikrofonen til å diktere når diktering er tilgjengelig. Du kan gå frem og tilbake mellom trinnene mens du øver.",
+    description: "Velg en case og arbeid med oppgavene i eget tempo.",
+    body: "Les hele casen samlet, eller gå mellom situasjon og oppgaver. Skriv eller dikter svaret ditt. Du kan redigere alle svar frem til du fullfører.",
   },
   faq: {
     label: "FAQ",
     title: "Før du begynner",
     description: "Du kan starte øvingscasen uten å opprette en konto.",
-    body: "De tre øvingsknappene åpner foreløpig den samme casen. Tidsangivelsene er forslag til hvor lenge du kan øve. Svar lagres ikke når du avslutter casen. Diktering krever mikrofontilgang og en tilgjengelig transkriberingstjeneste.",
+    body: "Øvingsknappene åpner caseoversikten. Tidsangivelsene er forslag til øvingslengde. Svar lagres på denne enheten og deles ikke mellom enheter. Diktering krever mikrofontilgang og en tilgjengelig transkriberingstjeneste.",
   },
   profil: {
     label: "Profil",
     title: "Øv uten innlogging",
     description: "Øvingscasen er åpen og klar til bruk.",
-    body: "Personlig profil og lagring av fremgang er ikke tilgjengelig ennå. Du kan likevel starte en case og øve i ditt eget tempo.",
+    body: "Du trenger ingen konto. Kladdene dine lagres på denne enheten. Personlig profil og synkronisering mellom enheter er ikke tilgjengelig.",
   },
 } as const;
 
@@ -181,8 +181,7 @@ export function Landing({ onStart }: { onStart: () => void }) {
       <section className="hero-content" aria-labelledby="hero-title">
         <div className="hero-copy">
           <h1 id="hero-title" className="hero-title">
-            Øv som{" "}
-            <br />
+            Øv som <br />
             på eksamen
           </h1>
           <p className="hero-description">

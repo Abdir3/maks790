@@ -76,12 +76,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      {
+        name: "viewport",
+        content: "width=device-width, initial-scale=1, interactive-widget=resizes-content",
+      },
       { title: "MAKS790 — Øv som på eksamen" },
-      { name: "description", content: "Øv på klinisk resonnering i akuttmedisin med realistiske pasienthistorier." },
+      {
+        name: "description",
+        content: "Øv på klinisk resonnering i akuttmedisin med realistiske pasienthistorier.",
+      },
       { name: "author", content: "MAKS790" },
       { property: "og:title", content: "MAKS790 — Øv som på eksamen" },
-      { property: "og:description", content: "Øv på klinisk resonnering i akuttmedisin med realistiske pasienthistorier." },
+      {
+        property: "og:description",
+        content: "Øv på klinisk resonnering i akuttmedisin med realistiske pasienthistorier.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
