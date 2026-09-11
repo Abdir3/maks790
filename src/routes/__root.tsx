@@ -77,11 +77,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "MAKS790 — Clinical Reasoning Exam" },
-      { name: "description", content: "Practice long-form acute medicine cases with focused clinical reasoning." },
+      { title: "MAKS790 — Øv som på eksamen" },
+      { name: "description", content: "Øv på klinisk resonnering i akuttmedisin med realistiske pasienthistorier." },
       { name: "author", content: "MAKS790" },
-      { property: "og:title", content: "MAKS790 — Clinical Reasoning Exam" },
-      { property: "og:description", content: "Practice long-form acute medicine cases with focused clinical reasoning." },
+      { property: "og:title", content: "MAKS790 — Øv som på eksamen" },
+      { property: "og:description", content: "Øv på klinisk resonnering i akuttmedisin med realistiske pasienthistorier." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
@@ -106,7 +106,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="nb">
       <head>
         <HeadContent />
       </head>
