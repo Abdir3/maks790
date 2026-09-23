@@ -49,7 +49,11 @@ export function buildDefinition(
     const content: ContentBlock[] = blocks(stage.paragraphs);
     if (stage.quote?.trim()) content.push({ type: "quote", text: stage.quote });
     if (stage.list?.items?.length)
-      content.push({ type: "list", title: stage.list.title || undefined, items: stage.list.items });
+      content.push(
+        stage.list.title
+          ? { type: "list", title: stage.list.title, items: stage.list.items }
+          : { type: "list", items: stage.list.items },
+      );
 
     const questions: CaseQuestion[] = (stage.questions ?? []).map((question) => {
       questionNumber += 1;

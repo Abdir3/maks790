@@ -159,7 +159,7 @@ export const saveGeneratedCase = createServerFn({ method: "POST" })
       user_id: context.userId,
       format: data.meta.format,
       title: definition.title,
-      definition: definition as unknown as Record<string, unknown>,
+      definition: JSON.parse(JSON.stringify(definition)),
       engine: data.meta.engine,
       presentation: data.meta.presentation,
       diagnosis_family: data.plan.diagnosisFamily,

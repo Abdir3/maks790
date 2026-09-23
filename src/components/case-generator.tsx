@@ -40,7 +40,7 @@ export function CaseGenerator({
   const save = useServerFn(saveGeneratedCase);
 
   const [stages, setStages] = useState("4");
-  const [startSetting, setStartSetting] = useState(START_SETTINGS[0].label);
+  const [startSetting, setStartSetting] = useState<string>(START_SETTINGS[0].label);
   const [status, setStatus] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
