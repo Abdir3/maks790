@@ -90,7 +90,15 @@ export function Brand() {
   );
 }
 
-export function Landing({ onStart }: { onStart: () => void }) {
+export function Landing({
+  onStart,
+  onQuick,
+  onLibrary,
+}: {
+  onStart: () => void;
+  onQuick: () => void;
+  onLibrary: () => void;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeInformation, setActiveInformation] = useState<InformationKey | null>(null);
   const selected = activeInformation ? information[activeInformation] : null;
@@ -169,6 +177,16 @@ export function Landing({ onStart }: { onStart: () => void }) {
                   </button>
                 ))}
               </nav>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onLibrary();
+                }}
+                className="w-full"
+              >
+                Mine caser
+              </Button>
               <Button onClick={onStart} className="w-full">
                 Start eksamen
                 <ArrowRight aria-hidden="true" />
@@ -264,7 +282,7 @@ export function Landing({ onStart }: { onStart: () => void }) {
                 </>
               }
               time="10–15 min"
-              onClick={onStart}
+              onClick={onQuick}
             />
             <ModeButton
               icon={BookOpen}
