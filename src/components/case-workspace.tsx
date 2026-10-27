@@ -32,6 +32,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CaseReader } from "@/components/case-reader";
+import { CaseFeedbackPanel, type AssessAnswers } from "@/components/case-feedback";
 import { PartSituation, QuestionPrompt } from "@/components/case-content";
 import { useCaseDraft } from "@/hooks/use-case-draft";
 import { useCaseDictation } from "@/hooks/use-case-dictation";
@@ -73,13 +74,24 @@ function useWorkspaceViewport() {
 export function CaseWorkspace({
   definition,
   onExit,
+  onAssess,
 }: {
   definition: CaseDefinition;
   onExit: () => void;
+  onAssess?: AssessAnswers;
 }) {
   const { draft, ready, update, reset, storageError, recoveryError } = useCaseDraft(definition);
   const { desktop, height } = useWorkspaceViewport();
-  const part = definition.parts.find((item) => item.id === draft.partId) ?? definition.parts[0];
+  const unlocked =
+    definition.practice?.sequential && !draft.completedAt
+      ? (draft.unlockedParts ?? 1)
+      : definition.parts.length;
+  const visibleDefinition = {
+    ...definition,
+    parts: definition.parts.slice(0, unlocked) as CaseDefinition["parts"],
+  };
+  const part =
+    visibleDefinition.parts.find((item) => item.id === draft.partId) ?? definition.parts[0];
   const partIndex = definition.parts.indexOf(part);
   const questions = allQuestions(definition);
   const partQuestions = questionsForPart(part);
@@ -158,6 +170,7 @@ export function CaseWorkspace({
   }, [part.id, draft.tab, ready, desktop, review, completed]);
 
   const openQuestion = (question: LocatedQuestion) => {
+    if (!visibleDefinition.parts.some((p) => p.id === question.partId)) return;
     if (completed) {
       document.getElementById(`review-${question.id}`)?.scrollIntoView({ block: "start" });
       return;
@@ -177,7 +190,7 @@ export function CaseWorkspace({
     });
   };
   const changePart = (partId: string) => {
-    const selected = definition.parts.find((item) => item.id === partId);
+    const selected = visibleDefinition.parts.find((item) => item.id === partId);
     if (!selected) return;
     update((current) => ({
       ...current,
@@ -225,7 +238,7 @@ export function CaseWorkspace({
           </div>
           <Button variant="outline" className="case-read-button" onClick={() => openReader()}>
             <BookOpen aria-hidden="true" />
-            <span>Hele casen</span>
+            <span>{unlocked < definition.parts.length ? "Tilgjengelige deler" : "Hele casen"}</span>
           </Button>
         </div>
         <div className="case-progress-row">
@@ -255,7 +268,7 @@ export function CaseWorkspace({
                 <button
                   type="button"
                   key={item.id}
-                  disabled={!ready}
+                  disabled={!ready || index >= unlocked}
                   aria-current={item.id === part.id ? "step" : undefined}
                   onClick={() => changePart(item.id)}
                 >
@@ -276,7 +289,7 @@ export function CaseWorkspace({
               </SelectTrigger>
               <SelectContent>
                 {definition.parts.map((item, index) => (
-                  <SelectItem key={item.id} value={item.id}>
+                  <SelectItem key={item.id} value={item.id} disabled={index >= unlocked}>
                     Del {index + 1} av {definition.parts.length} · {item.shortTitle ?? item.title}
                   </SelectItem>
                 ))}
@@ -294,6 +307,11 @@ export function CaseWorkspace({
           <Button variant="ghost" onClick={() => setConfirmation("reset")}>
             Start ny kladd
           </Button>
+        </div>
+      )}
+      {definition.practice && (
+        <div className="case-notice">
+          Øvingscase · automatiske kontroller · ikke klinisk fagpersonsignert
         </div>
       )}
       {dictation.busy && (
@@ -346,7 +364,7 @@ export function CaseWorkspace({
                 </p>
               )}
             </div>
-            {definition.parts.map(
+            {visibleDefinition.parts.map(
               (item, index) =>
                 questionsForPart(item).length > 0 && (
                   <section key={item.id} className="case-review-part">
@@ -384,6 +402,13 @@ export function CaseWorkspace({
                   </section>
                 ),
             )}
+            {completed && onAssess && (
+              <CaseFeedbackPanel
+                definition={definition}
+                answers={draft.answers}
+                assess={onAssess}
+              />
+            )}
           </div>
           <footer className="case-actionbar">
             {completed ? (
@@ -404,7 +429,7 @@ export function CaseWorkspace({
                   Tilbake
                 </Button>
                 <Button
-                  disabled={!ready || dictation.busy}
+                  disabled={!ready || dictation.busy || unlocked < definition.parts.length}
                   onClick={() => {
                     update((current) => ({ ...current, completedAt: new Date().toISOString() }));
                     reviewPanel.current?.scrollTo(0, 0);
@@ -550,7 +575,23 @@ export function CaseWorkspace({
               <FileText aria-hidden="true" />
               Se gjennom
             </Button>
-            {partQuestions.length === 0 ? (
+            {partIndex === unlocked - 1 && unlocked < definition.parts.length ? (
+              <Button
+                disabled={!ready || dictation.busy}
+                onClick={() => {
+                  const next = definition.parts[unlocked]!;
+                  update((current) => ({
+                    ...current,
+                    unlockedParts: unlocked + 1,
+                    partId: next.id,
+                    tab: "situation",
+                  }));
+                }}
+              >
+                Vis neste del
+                <ArrowRight />
+              </Button>
+            ) : partQuestions.length === 0 ? (
               <Button
                 disabled={!ready}
                 onClick={() => {
@@ -584,7 +625,7 @@ export function CaseWorkspace({
       )}
 
       <CaseReader
-        definition={definition}
+        definition={visibleDefinition}
         open={readerOpen}
         onOpenChange={setReaderOpen}
         startAt={readerStart}

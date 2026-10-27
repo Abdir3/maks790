@@ -16,7 +16,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { cases } from "@/data/cases";
 import { allQuestions, type CaseDefinition } from "@/lib/case-model";
-import { deleteGeneratedCase, listMyCases } from "@/lib/cases.functions";
+import { assessCase, deleteGeneratedCase, listMyCases } from "@/lib/cases.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -24,12 +24,14 @@ export const Route = createFileRoute("/")({
       { title: "MAKS790 — Øv som på eksamen" },
       {
         name: "description",
-        content: "Øv på klinisk resonnering i akuttmedisin med nye, uforutsigbare pasienthistorier.",
+        content:
+          "Øv på klinisk resonnering i akuttmedisin med nye, uforutsigbare pasienthistorier.",
       },
       { property: "og:title", content: "MAKS790 — Øv som på eksamen" },
       {
         property: "og:description",
-        content: "Øv på klinisk resonnering i akuttmedisin med nye, uforutsigbare pasienthistorier.",
+        content:
+          "Øv på klinisk resonnering i akuttmedisin med nye, uforutsigbare pasienthistorier.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -38,7 +40,12 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type SavedCase = { id: string; title: string; format: "long" | "quick"; definition: CaseDefinition };
+type SavedCase = {
+  id: string;
+  title: string;
+  format: "long" | "quick";
+  definition: CaseDefinition;
+};
 
 function Index() {
   const { user } = useAuth();
@@ -48,6 +55,7 @@ function Index() {
   const [saved, setSaved] = useState<SavedCase[]>([]);
   const list = useServerFn(listMyCases);
   const remove = useServerFn(deleteGeneratedCase);
+  const assess = useServerFn(assessCase);
 
   const refresh = useCallback(() => {
     if (!user) {
@@ -75,6 +83,12 @@ function Index() {
       <CaseWorkspace
         key={active.id}
         definition={active}
+        {...(active.practice
+          ? {
+              onAssess: (answers: Record<string, string>) =>
+                assess({ data: { id: active.id.replace(/^gen-/, ""), answers } }),
+            }
+          : {})}
         onExit={() => {
           setActive(null);
           refresh();
@@ -105,7 +119,8 @@ function Index() {
             <p className="case-eyebrow">MAKS790 / Mine caser</p>
             <DialogTitle className="text-2xl">Velg en case</DialogTitle>
             <DialogDescription className="pt-2">
-              Casene du har laget, sammen med de faste øvingscasene. Kladden lagres på denne enheten.
+              Casene du har laget, sammen med de faste øvingscasene. Kladden lagres på denne
+              enheten.
             </DialogDescription>
           </DialogHeader>
           <div className="case-library-list">
@@ -163,7 +178,9 @@ function Index() {
                     <strong>{item.title}</strong>
                     {item.patient && <span>{item.patient}</span>}
                     <small>
-                      {item.parts.length === 1 ? "Én samlet situasjon" : item.parts.length + " deler"}{" "}
+                      {item.parts.length === 1
+                        ? "Én samlet situasjon"
+                        : item.parts.length + " deler"}{" "}
                       · {total} {total === 1 ? "oppgave" : "oppgaver"}
                     </small>
                   </div>

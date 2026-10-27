@@ -36,6 +36,7 @@ export type CaseDefinition = {
   patient?: string;
   specialty?: string;
   background?: ContentBlock[];
+  practice?: { version: 2; difficulty: "advanced" | "complex"; sequential: boolean };
   parts: [CasePart, ...CasePart[]];
 };
 export type LocatedQuestion = AnswerQuestion & {
@@ -50,6 +51,7 @@ export type CaseDraft = {
   partId: string;
   tab: WorkspaceTab;
   completedAt: string | null;
+  unlockedParts?: number;
 };
 
 export function questionsForPart(part: CasePart): LocatedQuestion[] {
@@ -99,6 +101,7 @@ export function blankDraft(definition: CaseDefinition): CaseDraft {
     partId: definition.parts[0].id,
     tab: "situation",
     completedAt: null,
+    unlockedParts: 1,
   };
 }
 
@@ -129,6 +132,9 @@ export function parseDraft(raw: string | null, definition: CaseDefinition): Case
       typeof saved.completedAt === "string" && Number.isFinite(Date.parse(saved.completedAt))
         ? saved.completedAt
         : null,
+    unlockedParts: Number.isInteger(saved.unlockedParts)
+      ? Math.max(1, Math.min(definition.parts.length, saved.unlockedParts!))
+      : 1,
   };
 }
 

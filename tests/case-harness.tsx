@@ -9,6 +9,14 @@ import {
 } from "@tanstack/react-router";
 import { CaseWorkspace } from "../src/components/case-workspace";
 import { browserFixtures } from "./case-fixtures";
+import { generatedDefinition, generatedFixture, feedbackFixture, draw } from "./generator-fixtures";
+import { allQuestions } from "../src/lib/case-model";
+import { buildDefinition } from "../src/lib/generated-case";
+const fixtures = [
+  ...browserFixtures,
+  generatedDefinition,
+  buildDefinition("quick-harness", generatedFixture(1), draw),
+];
 import "../src/styles.css";
 
 // Test-only microphone: no access to the user's actual audio devices.
@@ -38,7 +46,7 @@ export function Harness() {
   const [index, setIndex] = useState(0);
   const [largeText, setLargeText] = useState(false);
   const [storageFailure, setStorageFailure] = useState(false);
-  const definition = browserFixtures[index]!;
+  const definition = fixtures[index]!;
   return (
     <>
       <div
@@ -60,7 +68,7 @@ export function Harness() {
             value={index}
             onChange={(event) => setIndex(Number(event.target.value))}
           >
-            {browserFixtures.map((item, i) => (
+            {fixtures.map((item, i) => (
               <option key={item.id} value={i}>
                 {item.title}
               </option>
@@ -95,7 +103,28 @@ export function Harness() {
       <CaseWorkspace
         key={definition.id}
         definition={definition}
-        onExit={() => setIndex((value) => (value + 1) % browserFixtures.length)}
+        onExit={() => setIndex((value) => (value + 1) % fixtures.length)}
+        {...(definition.practice
+          ? {
+              onAssess: async (answers: Record<string, string>) => ({
+                feedback: {
+                  summary:
+                    "Simulert tilbakemelding for nettlesertest. Ingen reell modellvurdering.",
+                  questions: allQuestions(definition).flatMap(
+                    (q) => feedbackFixture(q.id, answers[q.id] ?? "").questions,
+                  ),
+                },
+                sources: [
+                  {
+                    id: "assignment-2",
+                    title: "Testkilde",
+                    url: "https://example.com",
+                    scope: "Kun testdata.",
+                  },
+                ],
+              }),
+            }
+          : {})}
       />
     </>
   );
