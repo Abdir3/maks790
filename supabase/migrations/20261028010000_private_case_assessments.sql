@@ -1,5 +1,11 @@
 BEGIN;
 
+-- Keep the archived rows and the following public cleanup on one stable set.
+-- The old application must not insert a case between those two statements.
+-- Fail promptly if the coordinated cutover cannot obtain the lock.
+SET LOCAL lock_timeout = '5s';
+LOCK TABLE public.generated_cases IN ACCESS EXCLUSIVE MODE;
+
 -- The learner can read the case, but the answer basis and diagnostic history
 -- are only accessible to the authenticated application server.
 CREATE TABLE public.case_assessments (
