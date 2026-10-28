@@ -30,26 +30,20 @@ const information = {
   fagomrader: {
     label: "Fagområder",
     title: "Akuttmedisin, steg for steg",
-    description: "Øv med faste caser eller lag nye innen tolv fagområder.",
+    description: "Øv med faste caser eller lag nye innen pensumets fagområder.",
     body: "Utforsk pasienthistorien, kliniske funn og tilgjengelige undersøkelser. Arbeid videre med differensialdiagnoser, behandling og refleksjon.",
   },
   "slik-fungerer-det": {
     label: "Slik fungerer det",
     title: "Les. Vurder. Forklar.",
     description: "Velg en case og arbeid med oppgavene i eget tempo.",
-    body: "Les situasjonen og begrunn valgene dine. Nye pasientforløp åpnes del for del. Skriv eller dikter svaret ditt. Du kan redigere frem til fullføring og be om KI-tilbakemelding på nye caser.",
+    body: "Hele casen og alle oppgavene er tilgjengelige fra starten. Les situasjonen, vurder funnene og begrunn valgene dine. På nye caser kan du skrive eller diktere egne svar og få samlet tilbakemelding, eller åpne et begrunnet løsningsforslag. Du kan bearbeide svarene etter tilbakemeldingen. Øvingen gir ingen karakter.",
   },
   faq: {
     label: "FAQ",
     title: "Før du begynner",
-    description: "Du kan starte øvingscasen uten å opprette en konto.",
-    body: "Faste caser er åpne. Nye caser og KI-tilbakemelding krever innlogging. Tidsangivelsene er forslag til øving, ikke eksamenskrav. Svar lagres på denne enheten. Diktering krever mikrofontilgang og en tilgjengelig transkriberingstjeneste. Øvingen er ikke offisiell eksamen eller sensur.",
-  },
-  profil: {
-    label: "Profil",
-    title: "Faste og personlige caser",
-    description: "Faste øvingscaser kan brukes uten konto.",
-    body: "Logg inn for å lage og hente dine genererte caser. Svarutkast lagres bare på denne enheten og synkroniseres ikke mellom enheter.",
+    description: "Prøv et åpent eksempel i casebiblioteket uten konto.",
+    body: "De åpne eksemplene har oppgaver og lokal kladd, men ingen KI-tilbakemelding eller løsningsforslag. Logg inn for å lage nye caser med begge deler. Svarutkast lagres bare på denne enheten og synkroniseres ikke mellom enheter. Diktering krever mikrofontilgang og en tilgjengelig transkriberingstjeneste. Øvingen er ikke offisiell eksamen eller sensur.",
   },
 } as const;
 
@@ -94,13 +88,28 @@ export function Landing({
   onStart,
   onQuick,
   onLibrary,
+  onLogin,
+  onLogout,
+  authReady,
+  signedIn,
+  userEmail,
+  signingOut,
+  accountError,
 }: {
   onStart: () => void;
   onQuick: () => void;
   onLibrary: () => void;
+  onLogin: () => void;
+  onLogout: () => Promise<boolean>;
+  authReady: boolean;
+  signedIn: boolean;
+  userEmail: string | null;
+  signingOut: boolean;
+  accountError: string | null;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeInformation, setActiveInformation] = useState<InformationKey | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
   const selected = activeInformation ? information[activeInformation] : null;
 
   return (
@@ -125,26 +134,31 @@ export function Landing({
       <header className="landing-header">
         <Brand />
         <nav className="landing-nav" aria-label="Hovedmeny">
-          {navigation.map((key) => (
-            <button
-              type="button"
-              className="story-link"
-              key={key}
-              onClick={() => setActiveInformation(key)}
-            >
-              {information[key].label}
-            </button>
-          ))}
+          <button type="button" className="story-link" onClick={onLibrary}>
+            Casebibliotek
+          </button>
+          {navigation
+            .filter((key) => key !== "faq")
+            .map((key) => (
+              <button
+                type="button"
+                className="story-link"
+                key={key}
+                onClick={() => setActiveInformation(key)}
+              >
+                {information[key].label}
+              </button>
+            ))}
         </nav>
         <div className="landing-header-actions">
           <Button
             variant="ghost"
-            size="icon"
-            className="landing-icon-button"
-            onClick={() => setActiveInformation("profil")}
-            aria-label="Åpne profil"
+            className="min-h-11 px-2 text-inherit hover:bg-white/10 hover:text-white"
+            disabled={!authReady || signingOut}
+            onClick={() => (signedIn ? setAccountOpen(true) : onLogin())}
           >
-            <UserRound strokeWidth={1.4} />
+            <UserRound strokeWidth={1.4} aria-hidden="true" />
+            {!authReady ? "Venter …" : signedIn ? "Konto" : "Logg inn"}
           </Button>
           <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
             <SheetTrigger asChild>
@@ -163,7 +177,7 @@ export function Landing({
                 <SheetDescription>Akuttmedisin</SheetDescription>
               </SheetHeader>
               <nav aria-label="Utvidet meny" className="landing-menu-links">
-                {[...navigation, "profil" as const].map((key) => (
+                {navigation.map((key) => (
                   <button
                     type="button"
                     key={key}
@@ -185,11 +199,40 @@ export function Landing({
                 }}
                 className="w-full"
               >
-                Mine caser
+                Casebibliotek
               </Button>
-              <Button onClick={onStart} className="w-full">
-                Start eksamen
-                <ArrowRight aria-hidden="true" />
+              <Button
+                disabled={!authReady || signingOut}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onQuick();
+                }}
+                className="w-full"
+              >
+                Kort klinisk case
+              </Button>
+              <Button
+                disabled={!authReady || signingOut}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onStart();
+                }}
+                className="w-full"
+                variant="outline"
+              >
+                Lang eksamensøving
+              </Button>
+              <Button
+                disabled={!authReady || signingOut}
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  setMenuOpen(false);
+                  if (signedIn) setAccountOpen(true);
+                  else onLogin();
+                }}
+              >
+                {signedIn ? "Konto og utlogging" : "Logg inn"}
               </Button>
             </SheetContent>
           </Sheet>
@@ -203,9 +246,9 @@ export function Landing({
             på eksamen
           </h1>
           <p className="hero-description">
-            Reelle situasjoner. Tydelig tilbakemelding.
+            Korte kliniske vurderinger.
             <br />
-            Bedre beslutninger.
+            Lange, helhetlige eksamenscaser.
           </p>
           <div className="hero-divider" aria-hidden="true" />
           <p className="hero-signature">Akuttmedisin gjør en forskjell</p>
@@ -218,8 +261,9 @@ export function Landing({
             variant="bare"
             size="free"
             onClick={onStart}
+            disabled={!authReady || signingOut}
             className="exam-orbit"
-            aria-label="Start eksamen"
+            aria-label="Lang eksamensøving — 3–6 deler, bred kasuistikk på eksamensnivå"
           >
             <span className="orbit-ring orbit-ring-outer" aria-hidden="true" />
             <span className="orbit-ring orbit-ring-middle" aria-hidden="true" />
@@ -229,10 +273,14 @@ export function Landing({
             <span className="exam-orbit-content">
               <Brain className="exam-brain" strokeWidth={0.9} aria-hidden="true" />
               <span className="exam-orbit-title">
-                Start
-                <br />
-                eksamen
+                <span className="long-title-compact">
+                  Lang
+                  <br />
+                  case
+                </span>
+                <span className="long-title-mobile">Lang eksamensøving</span>
               </span>
+              <span className="long-mode-description">3–6 deler · eksamensnivå</span>
               <span className="exam-arrow">
                 <ArrowRight strokeWidth={2} aria-hidden="true" />
               </span>
@@ -267,41 +315,19 @@ export function Landing({
           <div className="practice-branch">
             <ModeButton
               icon={Zap}
-              title={
-                <>
-                  Kort
-                  <br />
-                  repetisjon
-                </>
-              }
-              detail={
-                <>
-                  Få opp de viktigste
-                  <br />
-                  prinsippene
-                </>
-              }
-              time="10–15 min"
+              title="Kort klinisk case"
+              detail="Tolk funn og begrunn vurderingene dine"
+              time="2–4 spørsmål"
               onClick={onQuick}
+              disabled={!authReady || signingOut}
             />
             <ModeButton
               icon={BookOpen}
-              title={
-                <>
-                  Lang
-                  <br />
-                  repetisjon
-                </>
-              }
-              detail={
-                <>
-                  Gå dypere, systematisk
-                  <br />
-                  gjennom fagområder
-                </>
-              }
-              time="30–60 min"
-              onClick={onStart}
+              title="Casebibliotek"
+              detail="Fortsett en case eller prøv et åpent eksempel"
+              time="Eksempler uten innlogging"
+              mobileMetadata="Se et eksempel uten å logge inn"
+              onClick={onLibrary}
             />
           </div>
         </div>
@@ -333,12 +359,56 @@ export function Landing({
                 </DialogDescription>
               </DialogHeader>
               <p className="text-sm leading-7 text-foreground/80">{selected.body}</p>
-              <Button className="mt-3 justify-self-start" onClick={onStart}>
-                Start eksamen
+              <Button
+                className="mt-3 justify-self-start"
+                onClick={() => {
+                  setActiveInformation(null);
+                  onLibrary();
+                }}
+              >
+                Åpne casebiblioteket
                 <ArrowRight aria-hidden="true" />
               </Button>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
+        <DialogContent className="landing-information">
+          <DialogHeader>
+            <DialogTitle>Kontoen din</DialogTitle>
+            <DialogDescription className="break-all">
+              {userEmail ?? "Du er logget inn."}
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm leading-6 text-muted-foreground">
+            De genererte casene dine følger kontoen. Svarutkast lagres bare på denne enheten og
+            synkroniseres ikke mellom enheter. Utlogging fjerner ikke lokale svarutkast.
+          </p>
+          {accountError && (
+            <p role="alert" className="text-sm text-destructive">
+              {accountError}
+            </p>
+          )}
+          <Button
+            variant="outline"
+            onClick={() => {
+              setAccountOpen(false);
+              onLibrary();
+            }}
+          >
+            Åpne casebiblioteket
+          </Button>
+          <Button
+            disabled={signingOut}
+            onClick={() =>
+              void onLogout().then((success) => {
+                if (success) setAccountOpen(false);
+              })
+            }
+          >
+            {signingOut ? "Logger ut …" : "Logg ut på denne enheten"}
+          </Button>
         </DialogContent>
       </Dialog>
     </main>
@@ -350,20 +420,35 @@ function ModeButton({
   title,
   detail,
   time,
+  mobileMetadata = time,
   onClick,
+  disabled = false,
 }: {
   icon: typeof Brain;
   title: ReactNode;
   detail: ReactNode;
   time: string;
+  mobileMetadata?: string;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="practice-mode">
-      <Button type="button" variant="bare" size="free" onClick={onClick} className="mode-button">
+      <Button
+        type="button"
+        variant="bare"
+        size="free"
+        onClick={onClick}
+        disabled={disabled}
+        className="mode-button"
+      >
         <Icon className="mode-icon" strokeWidth={1.3} aria-hidden="true" />
         <span className="mode-title">{title}</span>
         <span className="mode-description">{detail}</span>
+        <span className="mode-mobile-metadata">{mobileMetadata}</span>
+        <span className="mode-arrow">
+          <ArrowRight aria-hidden="true" />
+        </span>
       </Button>
       <span className="mode-duration">{time}</span>
     </div>

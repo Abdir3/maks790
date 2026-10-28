@@ -1,11 +1,14 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
+import { validatePracticeSearch } from "@/lib/practice-navigation";
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: validatePracticeSearch,
   head: () => ({
     meta: [
       { title: "Logg inn — MAKS790" },
@@ -26,36 +29,81 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const navigate = useNavigate();
+  const navigate = Route.useNavigate();
+  const { mode: practiceMode } = Route.useSearch();
+  const { user, ready } = useAuth();
   const [mode, setMode] = useState<"in" | "up">("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageKind, setMessageKind] = useState<"error" | "success">("error");
+  const submitting = useRef(false);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (ready && user && !busy)
+      void navigate({ to: "/", search: practiceMode ? { mode: practiceMode } : {}, replace: true });
+  }, [ready, user, busy, navigate, practiceMode]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (submitting.current) return;
+    submitting.current = true;
     setBusy(true);
     setMessage(null);
     try {
       if (mode === "up") {
-        const { error } = await supabase.auth.signUp({
-          email,
+        const confirmationUrl = new URL("/", window.location.origin);
+        if (practiceMode) confirmationUrl.searchParams.set("mode", practiceMode);
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
           password,
-          options: { emailRedirectTo: `${window.location.origin}/` },
+          options: { emailRedirectTo: confirmationUrl.toString() },
         });
+        if (!mounted.current) return;
         if (error) throw error;
-        setMessage("Kontoen er opprettet. Du kan logge inn nå.");
-        setMode("in");
+        if (data.session) {
+          await navigate({
+            to: "/",
+            search: practiceMode ? { mode: practiceMode } : {},
+            replace: true,
+          });
+        } else {
+          setMessageKind("success");
+          setMessage(
+            "Sjekk e-posten din for en bekreftelseslenke før du logger inn. Har du allerede en konto, kan du bruke innloggingen nedenfor.",
+          );
+          setMode("in");
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (!mounted.current) return;
         if (error) throw error;
-        void navigate({ to: "/" });
+        await navigate({
+          to: "/",
+          search: practiceMode ? { mode: practiceMode } : {},
+          replace: true,
+        });
       }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Noe gikk galt. Prøv igjen.");
+    } catch {
+      if (!mounted.current) return;
+      setMessageKind("error");
+      setMessage(
+        mode === "in"
+          ? "Kunne ikke logge inn. Kontroller e-post og passord, og prøv igjen. Hvis du nettopp opprettet konto, bekreft e-postadressen først."
+          : "Kunne ikke opprette konto. Kontroller opplysningene dine og prøv igjen.",
+      );
     } finally {
-      setBusy(false);
+      submitting.current = false;
+      if (mounted.current) setBusy(false);
     }
   }
 
@@ -67,7 +115,12 @@ function AuthPage() {
           {mode === "in" ? "Logg inn" : "Opprett konto"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Innlogging brukes til å lage nye caser og huske hvilke du har hatt.
+          {practiceMode
+            ? `Logg inn for å lage ${practiceMode === "quick" ? "en kort klinisk case" : "en lang eksamenscase"}. Valget ditt følger med videre.`
+            : "Logg inn for å lage nye caser og hente casene du har laget tidligere."}
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Svarutkast lagres bare på denne enheten.
         </p>
         <form onSubmit={submit} className="mt-8 space-y-4">
           <div className="space-y-2">
@@ -77,6 +130,7 @@ function AuthPage() {
               type="email"
               autoComplete="email"
               required
+              disabled={busy}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
@@ -88,25 +142,48 @@ function AuthPage() {
               type="password"
               autoComplete={mode === "in" ? "current-password" : "new-password"}
               required
+              disabled={busy}
               minLength={6}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
           </div>
-          {message && <p className="text-sm text-muted-foreground">{message}</p>}
+          {message && (
+            <p
+              role={messageKind === "error" ? "alert" : "status"}
+              className={`text-sm ${messageKind === "error" ? "text-destructive" : "text-foreground"}`}
+            >
+              {message}
+            </p>
+          )}
           <Button type="submit" className="w-full" disabled={busy}>
             {busy ? "Et øyeblikk…" : mode === "in" ? "Logg inn" : "Opprett konto"}
           </Button>
         </form>
         <button
           type="button"
+          disabled={busy}
           className="mt-5 text-sm text-muted-foreground underline underline-offset-4"
-          onClick={() => setMode(mode === "in" ? "up" : "in")}
+          onClick={() => {
+            setMessage(null);
+            setMode(mode === "in" ? "up" : "in");
+          }}
         >
           {mode === "in" ? "Har du ingen konto? Opprett en" : "Har du konto? Logg inn"}
         </button>
-        <div className="mt-8">
-          <Link to="/" className="text-sm text-muted-foreground underline underline-offset-4">
+        <div className="mt-8 flex flex-col items-start gap-4">
+          <Link
+            to="/"
+            search={{ library: true }}
+            className="text-sm text-foreground underline underline-offset-4"
+          >
+            Se et eksempel uten å logge inn
+          </Link>
+          <Link
+            to="/"
+            search={{}}
+            className="text-sm text-muted-foreground underline underline-offset-4"
+          >
             Tilbake til forsiden
           </Link>
         </div>
