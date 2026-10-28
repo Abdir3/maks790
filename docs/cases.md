@@ -35,6 +35,19 @@ a new draft. A failed write leaves the current text in memory and displays a
 warning. Completing shows a read-only collection of answers, with no automatic
 assessment. Starting again asks before replacing that case's saved answers.
 
+Generated v3 cases also offer whole-submission feedback and model answers from
+the answer overview before completion. Viewing a solution before completion
+records `modelAnswerViewedAt`; this remains a local practice marker, not proof
+of independent performance. Edited answers invalidate previously shown feedback.
+All parts remain available, including in legacy v2 cases. Older cases retain
+their questions/drafts but do not receive invented v3 assessment support.
+
+`investigations` holds timestamped laboratory, blood-gas, interpreted ECG and
+imaging groups. Measurements may include a `referenceRange`; specimen, oxygen,
+findings, conclusion and reference source are explicit fields. Generated case
+completeness is enforced by the generator contract, not retrofitted onto static
+source cases with legitimately missing historical data.
+
 Dictation retains the existing transcription service and its server-side
 `ELEVENLABS_API_KEY` configuration. An in-flight recording remains attached to
 the question where it started. Typed text stays editable while transcribing.

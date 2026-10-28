@@ -230,6 +230,7 @@
 }
 .case-situation-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
@@ -257,6 +258,9 @@
   font-size: 0.75rem;
   color: #cfc2d6;
   cursor: pointer;
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
 }
 .case-situation-meta > button svg {
   width: 15px;
@@ -343,6 +347,62 @@
 .case-measurements-table {
   table-layout: fixed;
   font-size: 0.875rem;
+}
+.case-investigations {
+  margin: 1.8rem 0;
+}
+.case-investigation + .case-investigation {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--case-border);
+}
+.case-investigation h3 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.case-investigation-context {
+  margin: 0.4rem 0 0.8rem;
+  font-size: 0.8rem;
+  color: #b9afc4;
+  line-height: 1.6;
+}
+.case-investigation-table {
+  table-layout: fixed;
+  font-size: 0.875rem;
+}
+.case-investigation-table :is(th, td) {
+  padding: 0.7rem 0.5rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.case-investigation-table th {
+  color: #aaa0b3;
+  font-size: 0.7rem;
+}
+.case-investigation-table tr {
+  border-color: #ffffff0d;
+}
+.case-investigation-table td strong {
+  color: #f4eae1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.case-report-text {
+  margin-top: 0.8rem;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+.case-reference-note {
+  margin-top: 0.6rem;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: #b9afc4;
+}
+.case-reference-note a {
+  color: #e5bc9e;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 .case-measurements-table :is(th, td) {
   white-space: normal;
@@ -1014,4 +1074,33 @@
 }
 .case-feedback textarea {
   min-height: 6rem;
+}
+.case-learning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.case-learning-actions button {
+  height: auto;
+  min-height: 2.5rem;
+  padding-block: 0.6rem;
+  white-space: normal;
+}
+.case-learning-note {
+  color: #b9afc4;
+  font-size: 0.8rem;
+}
+.case-solution-marker {
+  color: #e5bc9e;
+}
+.case-model-answer {
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--case-border);
+}
+.case-model-answer > p {
+  margin-top: 0.7rem;
+  margin-bottom: 1.5rem;
+}
+.case-feedback-question {
+  color: #d5c8df;
 }

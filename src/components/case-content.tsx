@@ -52,6 +52,68 @@ function MeasurementValue({ measurement }: { measurement: Measurement | undefine
   );
 }
 
+export function Investigations({ reports }: { reports: NonNullable<CasePart["investigations"]> }) {
+  return (
+    <div className="case-investigations">
+      {reports.map((report) => (
+        <section className="case-investigation" aria-label={report.title} key={report.id}>
+          <h3>{report.title}</h3>
+          <p className="case-investigation-context">
+            {report.timestamp}
+            {report.sampleType && <> · {report.sampleType}</>}
+            {report.oxygen && <> · {report.oxygen}</>}
+          </p>
+          {report.values.length > 0 && (
+            <Table className="case-investigation-table">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Analyse</TableHead>
+                  <TableHead>Resultat</TableHead>
+                  {report.values.some((value) => value.referenceRange) && (
+                    <TableHead>Referanseområde</TableHead>
+                  )}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {report.values.map((value) => (
+                  <TableRow key={value.id}>
+                    <TableCell className="measurement-label">{value.label}</TableCell>
+                    <TableCell>
+                      <MeasurementValue measurement={value} />
+                    </TableCell>
+                    {report.values.some((item) => item.referenceRange) && (
+                      <TableCell>{value.referenceRange || "—"}</TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {report.findings && (
+            <p className={report.kind === "blood-gas" ? "case-reference-note" : "case-report-text"}>
+              {report.findings}
+            </p>
+          )}
+          {report.sourceUrl && (
+            <p className="case-reference-note">
+              <a href={report.sourceUrl} target="_blank" rel="noreferrer">
+                {report.kind === "blood-gas"
+                  ? "Kilde for referanseområdene"
+                  : "Kilde for opplysningene"}
+              </a>
+            </p>
+          )}
+          {report.conclusion && (
+            <p className="case-report-text">
+              <strong>Rapportert konklusjon:</strong> {report.conclusion}
+            </p>
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export function Measurements({
   current,
   previous,
@@ -133,6 +195,7 @@ export function PartSituation({
       {part.measurements && (
         <Measurements key={part.id} current={part.measurements} previous={previous} />
       )}
+      {part.investigations?.length ? <Investigations reports={part.investigations} /> : null}
       {part.afterMeasurements && <ContentBlocks blocks={part.afterMeasurements} />}
     </>
   );

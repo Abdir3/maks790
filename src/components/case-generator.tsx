@@ -11,7 +11,13 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { generateCase } from "@/lib/cases.functions";
-import { START_SETTINGS, TOPICS, type SettingId, type Difficulty } from "@/lib/case-variety";
+import {
+  START_SETTINGS,
+  TOPICS,
+  isTopicSettingCompatible,
+  type SettingId,
+  type Difficulty,
+} from "@/lib/case-variety";
 import type { CaseDefinition } from "@/lib/case-model";
 export type GeneratorFormat = "long" | "quick";
 export function CaseGenerator({
@@ -26,19 +32,16 @@ export function CaseGenerator({
   const navigate = useNavigate();
   const { user, ready } = useAuth();
   const generate = useServerFn(generateCase);
-  const [stages, setStages] = useState(3);
+  const [stages, setStages] = useState(4);
   const [startSetting, setStartSetting] = useState<SettingId>("auto");
   const [difficulty, setDifficulty] = useState<Difficulty>("advanced");
   const [topic, setTopic] = useState("auto");
   const [busy, setBusy] = useState(false);
   const running = useRef(false);
   const [error, setError] = useState<string | null>(null);
-  const selectedMaxAge = TOPICS.find((t) => t.id === topic)?.maxAge ?? 110;
-  const compatible =
-    (startSetting !== "sykehjem" || selectedMaxAge >= 70) &&
-    (startSetting !== "kad" || selectedMaxAge >= 18);
+  const compatible = isTopicSettingCompatible(topic, startSetting, format ?? undefined);
   async function run() {
-    if (!format || !ready || !user || running.current) return;
+    if (!format || !ready || !user || running.current || !compatible) return;
     running.current = true;
     setBusy(true);
     setError(null);
@@ -68,12 +71,12 @@ export function CaseGenerator({
         <DialogHeader>
           <p className="case-eyebrow">MAKS790 / Ny øvingscase</p>
           <DialogTitle className="text-2xl">
-            {format === "quick" ? "Kort klinisk øving" : "Sammenhengende pasientforløp"}
+            {format === "quick" ? "Kort klinisk case" : "Lang eksamensøving"}
           </DialogTitle>
           <DialogDescription className="pt-2">
             {format === "quick"
-              ? "Én avgrenset beslutning med krav til begrunnelse."
-              : "Følg situasjonen over tid, begrunn valg og revurder når nye opplysninger kommer."}
+              ? "Vurder mest sannsynlig diagnose, tolk funnene og forklar hva de betyr for videre håndtering."
+              : "Et komplett pasientforløp med åpne oppgaver. Hele casen er tilgjengelig fra starten."}
           </DialogDescription>
         </DialogHeader>
         {ready && !user ? (
@@ -86,9 +89,9 @@ export function CaseGenerator({
             {!busy && (
               <div className="case-generator-fields">
                 <label>
-                  Tema
+                  Tema (valgfritt)
                   <select value={topic} onChange={(e) => setTopic(e.target.value)}>
-                    <option value="auto">Balansert pensumdekning</option>
+                    <option value="auto">Varier mellom pensumtemaene</option>
                     {TOPICS.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.label}
@@ -137,9 +140,8 @@ export function CaseGenerator({
               </div>
             )}
             <p className="text-sm leading-6 text-muted-foreground">
-              KI-generert øving med automatiske kontroller, uten klinisk fagpersonsignering. Dette
-              er ikke en offisiell eksamensoppgave. Tilbakemeldingen gir læringsstøtte, ikke
-              karakter.
+              Du kan skrive eller diktere, få tilbakemelding og se løsningsforslag. KI-støttet øving
+              gir ikke karakter.
             </p>
             {busy && (
               <div role="status" aria-live="polite" className="space-y-2">

@@ -16,7 +16,12 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { cases } from "@/data/cases";
 import { allQuestions, type CaseDefinition } from "@/lib/case-model";
-import { assessCase, deleteGeneratedCase, listMyCases } from "@/lib/cases.functions";
+import {
+  assessCase,
+  getModelAnswer,
+  deleteGeneratedCase,
+  listMyCases,
+} from "@/lib/cases.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -56,6 +61,7 @@ function Index() {
   const list = useServerFn(listMyCases);
   const remove = useServerFn(deleteGeneratedCase);
   const assess = useServerFn(assessCase);
+  const modelAnswer = useServerFn(getModelAnswer);
 
   const refresh = useCallback(() => {
     if (!user) {
@@ -83,10 +89,11 @@ function Index() {
       <CaseWorkspace
         key={active.id}
         definition={active}
-        {...(active.practice
+        {...(active.practice?.version === 3
           ? {
-              onAssess: (answers: Record<string, string>) =>
-                assess({ data: { id: active.id.replace(/^gen-/, ""), answers } }),
+              onAssess: (answers: Record<string, string>, solutionViewed?: boolean) =>
+                assess({ data: { id: active.id.replace(/^gen-/, ""), answers, solutionViewed } }),
+              onModelAnswer: () => modelAnswer({ data: { id: active.id.replace(/^gen-/, "") } }),
             }
           : {})}
         onExit={() => {

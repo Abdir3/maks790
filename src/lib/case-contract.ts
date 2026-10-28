@@ -52,13 +52,58 @@ const rubric = obj({
   critical: arr(str(), 0, 4),
   sourceIds: arr(str(1, 80), 1, 6),
 });
-const question = obj({ prompt: str(20, 2000), skill: choice([...SKILLS]), rubric });
+const question = obj({
+  prompt: str(20, 2000),
+  skill: choice([...SKILLS]),
+  temporalScope: choice(["at-time", "whole-case"]),
+  rubric,
+});
+const eventTime = () => num(-525600, 10080);
+const medication = obj({
+  name: str(1, 160),
+  activeIngredient: str(1, 160),
+  dose: str(1, 120),
+  route: str(1, 100),
+  schedule: str(1, 200),
+  context: choice(["regular", "given", "reported"]),
+  timeMinutes: eventTime(),
+  sourceIds: arr(str(1, 80), 1, 4),
+});
+const laboratory = obj({
+  id: str(1, 80),
+  label: str(1, 160),
+  value: str(1, 500),
+  unit: str(0, 50),
+  referenceRange: str(1, 160),
+  sampleType: str(1, 100),
+  timeMinutes: eventTime(),
+});
+const bloodGas = obj({
+  sampleType: choice(["arterial", "venous"]),
+  sampledAt: str(1, 120),
+  oxygen: str(1, 200),
+  pH: num(6.5, 8),
+  pCO2: num(0.5, 25),
+  pO2: num(0.1, 100),
+  timeMinutes: eventTime(),
+});
+const report = obj({
+  kind: choice(["ecg", "imaging"]),
+  timeMinutes: eventTime(),
+  findings: str(1, 1800),
+  conclusion: str(1, 1200),
+});
 export const draftContract = obj({
   patient: str(5, 300),
   ageYears: num(0, 110),
+  role: str(5, 600),
   background: arr(str(), 1, 8),
   diagnosisFamily: str(2, 160),
   diagnosisAliases: arr(str(2, 100), 1, 8),
+  mechanism: str(5, 600),
+  presentation: str(5, 400),
+  reasoningTarget: str(10, 600),
+  pivotalFindings: arr(str(5, 500), 2, 8),
   dossier: str(30, 6000),
   stages: arr(
     obj({
@@ -66,6 +111,11 @@ export const draftContract = obj({
       elapsedMinutes: num(0, 10080),
       timeLabel: str(2, 120),
       paragraphs: arr(str(), 1, 6),
+      clinicalFindings: arr(str(), 1, 10),
+      medications: arr(medication, 0, 16),
+      laboratory: arr(laboratory, 0, 24),
+      bloodGas: arr(bloodGas, 0, 4),
+      reports: arr(report, 0, 6),
       vitals: arr(
         obj({
           id: choice([
@@ -77,15 +127,18 @@ export const draftContract = obj({
             "gcs",
             "glucose",
             "lactate",
+            "consciousness",
+            "capillaryRefill",
+            "weight",
           ]),
-          value: str(1, 30),
+          value: str(1, 160),
           unit: str(0, 30),
           note: str(0, 300),
         }),
         0,
-        8,
+        11,
       ),
-      questions: arr(question, 1, 3),
+      questions: arr(question, 1, 4),
     }),
     1,
     6,
@@ -105,6 +158,23 @@ export const reviewContract = obj({
   issues: arr(str(), 0, 12),
 });
 export type QualityReview = z.infer<typeof reviewContract.validator>;
+export const blindSolutionContract = obj({
+  summary: str(20, 2000),
+  questions: arr(
+    obj({
+      questionId: str(1, 120),
+      conclusion: str(10, 1500),
+      supportingFindings: arr(str(3, 600), 1, 6),
+      alternative: str(10, 1500),
+      clinicalConsequence: str(10, 1500),
+      missingDecisiveData: arr(str(), 0, 8),
+      requiresReasoning: bool,
+    }),
+    1,
+    24,
+  ),
+});
+export type BlindSolution = z.infer<typeof blindSolutionContract.validator>;
 export const feedbackContract = obj({
   summary: str(10, 1500),
   questions: arr(
@@ -120,8 +190,23 @@ export const feedbackContract = obj({
       sourceIds: arr(str(1, 80), 1, 6),
     }),
     1,
-    18,
+    24,
   ),
 });
 export type CaseFeedback = z.infer<typeof feedbackContract.validator>;
+export const modelAnswerContract = obj({
+  summary: str(10, 2000),
+  questions: arr(
+    obj({
+      questionId: str(1, 120),
+      explanation: str(30, 5000),
+      keyFindings: arr(str(), 1, 8),
+      alternatives: arr(str(), 1, 5),
+      sourceIds: arr(str(1, 80), 1, 6),
+    }),
+    1,
+    24,
+  ),
+});
+export type ModelAnswer = z.infer<typeof modelAnswerContract.validator>;
 export type SourceLink = { id: string; title: string; url: string; scope: string };

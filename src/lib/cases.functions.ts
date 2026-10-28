@@ -35,18 +35,15 @@ export const generateCase = createServerFn({ method: "POST" })
       const { drawVariety } = await import("@/lib/case-variety");
       const { generateJson } = await import("@/lib/ai-gateway.server");
       const { generateValidatedCase } = await import("@/lib/case-generation.server");
-      const { sealAssessment, assessmentSecret } = await import("@/lib/case-assessment.server");
-      const secret = assessmentSecret();
-      const { data: history, error } = await context.supabase
-        .from("generated_cases")
-        .select("engine, presentation, setting, diagnosis_family, definition")
-        .eq("user_id", context.userId)
-        .order("created_at", { ascending: false })
-        .limit(48);
-      if (error)
-        throw new Error("Kunne ikke lese casehistorikken. Prøv igjen før du lager en ny case.");
-      const draw = drawVariety(history ?? [], data);
-      const recent = (history ?? []).slice(0, 3).map((row) => publicDefinition(row.definition));
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { loadCaseHistory, saveCaseWithAssessment } =
+        await import("@/lib/case-persistence.server");
+      const { history, recent } = await loadCaseHistory(
+        context.supabase,
+        supabaseAdmin,
+        context.userId,
+      );
+      const draw = drawVariety(history, data);
       const id = crypto.randomUUID();
       const result = await generateValidatedCase({
         id: `gen-${id}`,
@@ -55,25 +52,14 @@ export const generateCase = createServerFn({ method: "POST" })
         recent,
         generate: generateJson,
       });
-      const sealed = await sealAssessment(
-        result.assessment,
-        context.userId,
-        result.definition,
-        secret,
-      );
-      const { error: saveError } = await context.supabase.from("generated_cases").insert({
+      await saveCaseWithAssessment(supabaseAdmin, {
         id,
-        user_id: context.userId,
+        userId: context.userId,
         format: data.format,
-        title: result.definition.title,
-        definition: JSON.parse(JSON.stringify({ ...result.definition, _assessment: sealed })),
-        engine: draw.decision,
-        presentation: draw.topicId,
-        diagnosis_family: draw.fingerprint,
-        setting: draw.settingId,
-        patient_profile: `${result.assessment.generated.ageYears} år`,
+        definition: result.definition,
+        assessment: result.assessment,
+        draw,
       });
-      if (saveError) throw new Error("Casen ble kontrollert, men kunne ikke lagres. Prøv igjen.");
       return { definition: result.definition };
     });
   });
@@ -87,9 +73,10 @@ export const assessCase = createServerFn({ method: "POST" })
         answers: z
           .record(z.string().max(18000))
           .refine(
-            (a) => Object.keys(a).length <= 18 && Object.values(a).join("").length <= 80000,
+            (a) => Object.keys(a).length <= 24 && Object.values(a).join("").length <= 80000,
             "Besvarelsen er for stor.",
           ),
+        solutionViewed: z.boolean().optional().default(false),
       })
       .strict()
       .parse(input),
@@ -97,47 +84,47 @@ export const assessCase = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { withCaseOperation } = await import("@/lib/case-operation.server");
     return withCaseOperation(context.userId, async () => {
-      const { openAssessment, assessmentSecret } = await import("@/lib/case-assessment.server");
       const { generateFeedback } = await import("@/lib/case-feedback.server");
       const { generateJson } = await import("@/lib/ai-gateway.server");
-      const { sourcesFor, SOURCE_VERSION } = await import("@/lib/case-sources.server");
-      const { draftContract, reviewContract } = await import("@/lib/case-contract");
+      const { sourcesFor } = await import("@/lib/case-sources.server");
       const { allQuestions } = await import("@/lib/case-model");
-      const { data: row, error } = await context.supabase
-        .from("generated_cases")
-        .select("definition")
-        .eq("user_id", context.userId)
-        .eq("id", data.id)
-        .maybeSingle();
-      if (error || !row) throw new Error("Fant ikke en case som tilhører deg.");
-      const definition = publicDefinition(row.definition);
-      const sealed = (row.definition as Record<string, unknown>)["_assessment"];
-      if (typeof sealed !== "string")
-        throw new Error("Denne eldre casen har ikke et kontrollert vurderingsgrunnlag.");
-      const payload = await openAssessment(sealed, context.userId, definition, assessmentSecret());
-      const assessment = z
-        .object({
-          generated: draftContract.validator,
-          review: reviewContract.validator,
-          sourceVersion: z.literal(SOURCE_VERSION),
-          sourceIds: z.array(z.string()),
-          createdAt: z.string(),
-        })
-        .safeParse(payload);
-      if (!assessment.success)
-        throw new Error(
-          "Denne casen bruker et eldre eller ugyldig vurderingsgrunnlag. Lag en ny case for oppdatert tilbakemelding.",
-        );
+      const { loadOwnedAssessment } = await import("@/lib/case-persistence.server");
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { definition, assessment } = await loadOwnedAssessment(
+        context.supabase,
+        supabaseAdmin,
+        context.userId,
+        data.id,
+      );
       const ids = new Set(allQuestions(definition).map((q) => q.id));
       if (Object.keys(data.answers).some((id) => !ids.has(id)))
         throw new Error("Besvarelsen inneholder ukjente oppgaver.");
-      const feedback = await generateFeedback(
-        definition,
-        assessment.data,
-        data.answers,
-        generateJson,
+      const feedback = await generateFeedback(definition, assessment, data.answers, generateJson, {
+        solutionViewed: data.solutionViewed,
+      });
+      return { feedback, sources: sourcesFor(assessment.sourceIds) };
+    });
+  });
+
+export const getModelAnswer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).strict().parse(input))
+  .handler(async ({ data, context }) => {
+    const { withCaseOperation } = await import("@/lib/case-operation.server");
+    return withCaseOperation(context.userId, async () => {
+      const { loadOwnedAssessment } = await import("@/lib/case-persistence.server");
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { generateModelAnswer } = await import("@/lib/case-feedback.server");
+      const { generateJson } = await import("@/lib/ai-gateway.server");
+      const { sourcesFor } = await import("@/lib/case-sources.server");
+      const { definition, assessment } = await loadOwnedAssessment(
+        context.supabase,
+        supabaseAdmin,
+        context.userId,
+        data.id,
       );
-      return { feedback, sources: sourcesFor(assessment.data.sourceIds) };
+      const modelAnswer = await generateModelAnswer(definition, assessment, generateJson);
+      return { modelAnswer, sources: sourcesFor(assessment.sourceIds) };
     });
   });
 

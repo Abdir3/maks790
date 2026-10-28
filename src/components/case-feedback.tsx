@@ -1,80 +1,174 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "./ui/button";
-import type { CaseFeedback, SourceLink } from "@/lib/case-contract";
+import type { CaseFeedback, ModelAnswer, SourceLink } from "@/lib/case-contract";
 import { allQuestions, type CaseDefinition } from "@/lib/case-model";
+
 export type AssessAnswers = (
   answers: Record<string, string>,
+  solutionViewed?: boolean,
 ) => Promise<{ feedback: CaseFeedback; sources: SourceLink[] }>;
+export type GetModelAnswer = () => Promise<{ modelAnswer: ModelAnswer; sources: SourceLink[] }>;
 const statusLabels = {
   developed: "Resonnementet er godt utviklet",
   partial: "Resonnementet kan utdypes",
   "needs-review": "Vurder dette på nytt",
   unanswered: "Ikke besvart",
 };
+
+function Sources({ ids, sources }: { ids: string[]; sources: SourceLink[] }) {
+  return (
+    <details>
+      <summary>Kildegrunnlag</summary>
+      {ids.map((id) => {
+        const source = sources.find((item) => item.id === id);
+        return source ? (
+          <p key={id}>
+            <a href={source.url} target="_blank" rel="noreferrer">
+              {source.title}
+            </a>
+            <br />
+            {source.scope}
+          </p>
+        ) : null;
+      })}
+    </details>
+  );
+}
+
 export function CaseFeedbackPanel({
   definition,
   answers,
   assess,
+  getModelAnswer,
+  onModelAnswerViewed,
+  modelAnswerViewed = false,
+  solutionUsed = false,
+  disabled = false,
 }: {
   definition: CaseDefinition;
   answers: Record<string, string>;
   assess: AssessAnswers;
+  getModelAnswer?: GetModelAnswer;
+  onModelAnswerViewed?: () => void;
+  modelAnswerViewed?: boolean;
+  solutionUsed?: boolean;
+  disabled?: boolean;
 }) {
-  const [result, setResult] = useState<Awaited<ReturnType<AssessAnswers>> | null>(null);
-  const [busy, setBusy] = useState(false);
+  const questions = allQuestions(definition);
+  const fingerprint = JSON.stringify([
+    questions.map((q) => [q.id, answers[q.id] ?? ""]),
+    solutionUsed,
+  ]);
+  const [assessment, setAssessment] = useState<{
+    fingerprint: string;
+    result: Awaited<ReturnType<AssessAnswers>>;
+  } | null>(null);
+  const [solution, setSolution] = useState<Awaited<ReturnType<GetModelAnswer>> | null>(null);
+  const [busy, setBusy] = useState<"feedback" | "solution" | null>(null);
   const running = useRef(false);
+  const mounted = useRef(true);
   const [error, setError] = useState("");
   const [report, setReport] = useState("");
-  async function run() {
-    if (running.current) return;
+  const result = assessment?.fingerprint === fingerprint ? assessment.result : null;
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  async function run(kind: "feedback" | "solution") {
+    if (running.current || disabled) return;
     running.current = true;
-    setBusy(true);
+    setBusy(kind);
     setError("");
+    const submittedAnswers = { ...answers };
+    const submittedFingerprint = fingerprint;
     try {
-      setResult(await assess(answers));
+      if (kind === "feedback") {
+        const response = await assess(submittedAnswers, solutionUsed);
+        if (mounted.current) setAssessment({ fingerprint: submittedFingerprint, result: response });
+      } else if (getModelAnswer) {
+        const response = await getModelAnswer();
+        if (mounted.current) {
+          setSolution(response);
+          onModelAnswerViewed?.();
+        }
+      }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Kunne ikke hente tilbakemelding.");
+      if (mounted.current)
+        setError(caught instanceof Error ? caught.message : "Kunne ikke hente læringsstøtten.");
     } finally {
       running.current = false;
-      setBusy(false);
+      if (mounted.current) setBusy(null);
     }
   }
+
   return (
-    <section className="case-feedback" aria-label="Faglig tilbakemelding">
-      <p className="case-eyebrow">Tilbakemelding til øving</p>
-      <h2>Utvikle resonnementet ditt</h2>
+    <section className="case-feedback" aria-label="Tilbakemelding og løsningsforslag">
+      <p className="case-eyebrow">Arbeid videre med casen</p>
+      <h2>Tilbakemelding og løsningsforslag</h2>
       <p>
-        KI-tilbakemeldingen kan inneholde feil. Den er ikke sensur eller klinisk godkjenning.
-        Svarene sendes til nettstedets KI-tjeneste når du ber om tilbakemelding; bruk bare fiktive
-        pasientopplysninger.
+        Få en samlet vurdering av svarene dine, eller se et begrunnet løsningsforslag. Du kan bruke
+        begge før du fullfører.
       </p>
-      {!result && (
-        <Button disabled={busy} onClick={() => void run()}>
-          {busy ? "Vurderer besvarelsen …" : "Få faglig tilbakemelding"}
+      <div className="case-learning-actions">
+        <Button disabled={disabled || busy !== null} onClick={() => void run("feedback")}>
+          {busy === "feedback"
+            ? "Vurderer besvarelsen …"
+            : result
+              ? "Vurder svarene på nytt"
+              : "Få tilbakemelding"}
         </Button>
-      )}
+        {getModelAnswer && (
+          <Button
+            variant="outline"
+            disabled={disabled || busy !== null}
+            onClick={() => void run("solution")}
+          >
+            {busy === "solution"
+              ? "Henter løsningsforslag …"
+              : solution || modelAnswerViewed
+                ? "Vis løsningsforslaget igjen"
+                : "Se løsningsforslag"}
+          </Button>
+        )}
+      </div>
+      {solutionUsed && <p className="case-solution-marker">Øvd med løsningsforslag</p>}
       {busy && (
         <p role="status">
-          Hver del vurderes med opplysningene som var tilgjengelige da. Dette kan ta flere minutter.
+          {busy === "feedback"
+            ? "Vurderer helheten og begrunnelsene i hver oppgave. Dette kan ta noen minutter."
+            : "Henter det faglige løsningsforslaget."}
         </p>
       )}
       {error && <p role="alert">{error}</p>}
+      {assessment && !result && (
+        <p role="status">
+          Svarene eller øvingsgrunnlaget er endret. Be om ny tilbakemelding på den aktuelle
+          besvarelsen.
+        </p>
+      )}
       {result && (
-        <>
-          <p>{result.feedback.summary}</p>
+        <div aria-label="Tilbakemelding på aktuell besvarelse">
+          <h3>Helhetsvurdering</h3>
+          <p className="case-answer-text">{result.feedback.summary}</p>
           {result.feedback.questions.map((item) => (
             <article className="case-feedback-item" key={item.questionId}>
               <h3>
-                {allQuestions(definition).find((q) => q.id === item.questionId)?.label} ·{" "}
+                {questions.find((q) => q.id === item.questionId)?.label} ·{" "}
                 {statusLabels[item.status]}
               </h3>
+              <p className="case-feedback-question">
+                {questions.find((q) => q.id === item.questionId)?.prompt}
+              </p>
               {item.evidence && <blockquote>«{item.evidence}»</blockquote>}
               {(
                 [
                   ["Styrker", item.strengths],
                   ["Utvikle videre", item.improvements],
                   ["Forsvarlige alternativer", item.alternatives],
-                  ["Sikkerhet og forbehold", item.safety],
+                  ["Viktige hensyn", item.safety],
                 ] as const
               ).map(
                 ([title, items]) =>
@@ -92,31 +186,46 @@ export function CaseFeedbackPanel({
               <p>
                 <strong>Neste steg:</strong> {item.nextStep}
               </p>
-              <details>
-                <summary>Kildegrunnlag og avgrensning</summary>
-                {item.sourceIds.map((id) => {
-                  const source = result.sources.find((s) => s.id === id);
-                  return source ? (
-                    <p key={id}>
-                      <a href={source.url} target="_blank" rel="noreferrer">
-                        {source.title}
-                      </a>
-                      <br />
-                      {source.scope}
-                    </p>
-                  ) : null;
-                })}
-              </details>
+              <Sources ids={item.sourceIds} sources={result.sources} />
             </article>
           ))}
-        </>
+        </div>
       )}
+      {solution && (
+        <section className="case-model-answer" aria-label="Begrunnet løsningsforslag">
+          <h3>Løsningsforslag</h3>
+          <p className="case-answer-text">{solution.modelAnswer.summary}</p>
+          {solution.modelAnswer.questions.map((item) => (
+            <article className="case-feedback-item" key={item.questionId}>
+              <h3>{questions.find((q) => q.id === item.questionId)?.label}</h3>
+              <p className="case-feedback-question">
+                {questions.find((q) => q.id === item.questionId)?.prompt}
+              </p>
+              <p className="case-answer-text">{item.explanation}</p>
+              <h4>Funn som bærer vurderingen</h4>
+              <ul>
+                {item.keyFindings.map((text, i) => (
+                  <li key={i}>{text}</li>
+                ))}
+              </ul>
+              <h4>Alternative vurderinger</h4>
+              <ul>
+                {item.alternatives.map((text, i) => (
+                  <li key={i}>{text}</li>
+                ))}
+              </ul>
+              <Sources ids={item.sourceIds} sources={solution.sources} />
+            </article>
+          ))}
+        </section>
+      )}
+      <p className="case-learning-note">
+        KI-støttet øving, ikke sensur. Svarene sendes til nettstedets KI-tjeneste når du ber om
+        tilbakemelding. Bruk fiktive pasientopplysninger.
+      </p>
       <details>
         <summary>Meld fra om en mulig fagfeil</summary>
-        <p>
-          Lag et notat du kan dele med faglærer eller nettstedets ansvarlige. Det sendes ikke
-          automatisk.
-        </p>
+        <p>Last ned et notat du selv kan dele med faglærer eller nettstedets ansvarlige.</p>
         <label>
           Hva bør undersøkes?
           <textarea value={report} onChange={(event) => setReport(event.target.value)} />
