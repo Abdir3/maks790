@@ -16,6 +16,9 @@ dist-ssr
 .nitro
 *.local
 
+# Supabase CLI local project state
+supabase/.temp/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
