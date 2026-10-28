@@ -1,13 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "./ui/button";
-import type { CaseFeedback, ModelAnswer, SourceLink } from "@/lib/case-contract";
+import type { SourceLink } from "@/lib/case-contract";
+import type { CaseLearning } from "@/hooks/use-case-learning";
 import { allQuestions, type CaseDefinition } from "@/lib/case-model";
 
-export type AssessAnswers = (
-  answers: Record<string, string>,
-  solutionViewed?: boolean,
-) => Promise<{ feedback: CaseFeedback; sources: SourceLink[] }>;
-export type GetModelAnswer = () => Promise<{ modelAnswer: ModelAnswer; sources: SourceLink[] }>;
+export type { AssessAnswers, GetModelAnswer } from "@/hooks/use-case-learning";
 const statusLabels = {
   developed: "Resonnementet er godt utviklet",
   partial: "Resonnementet kan utdypes",
@@ -37,72 +34,23 @@ function Sources({ ids, sources }: { ids: string[]; sources: SourceLink[] }) {
 
 export function CaseFeedbackPanel({
   definition,
-  answers,
-  assess,
-  getModelAnswer,
-  onModelAnswerViewed,
-  modelAnswerViewed = false,
+  learning,
+  onEditQuestion,
+  hasModelAnswer = false,
   solutionUsed = false,
   disabled = false,
 }: {
   definition: CaseDefinition;
-  answers: Record<string, string>;
-  assess: AssessAnswers;
-  getModelAnswer?: GetModelAnswer;
-  onModelAnswerViewed?: () => void;
-  modelAnswerViewed?: boolean;
+  learning: CaseLearning;
+  onEditQuestion: (questionId: string) => void;
+  hasModelAnswer?: boolean;
   solutionUsed?: boolean;
   disabled?: boolean;
 }) {
   const questions = allQuestions(definition);
-  const fingerprint = JSON.stringify([
-    questions.map((q) => [q.id, answers[q.id] ?? ""]),
-    solutionUsed,
-  ]);
-  const [assessment, setAssessment] = useState<{
-    fingerprint: string;
-    result: Awaited<ReturnType<AssessAnswers>>;
-  } | null>(null);
-  const [solution, setSolution] = useState<Awaited<ReturnType<GetModelAnswer>> | null>(null);
-  const [busy, setBusy] = useState<"feedback" | "solution" | null>(null);
-  const running = useRef(false);
-  const mounted = useRef(true);
-  const [error, setError] = useState("");
+  const { assessment, solution, solutionOpen, busy, error, feedbackIsCurrent } = learning;
   const [report, setReport] = useState("");
-  const result = assessment?.fingerprint === fingerprint ? assessment.result : null;
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  async function run(kind: "feedback" | "solution") {
-    if (running.current || disabled) return;
-    running.current = true;
-    setBusy(kind);
-    setError("");
-    const submittedAnswers = { ...answers };
-    const submittedFingerprint = fingerprint;
-    try {
-      if (kind === "feedback") {
-        const response = await assess(submittedAnswers, solutionUsed);
-        if (mounted.current) setAssessment({ fingerprint: submittedFingerprint, result: response });
-      } else if (getModelAnswer) {
-        const response = await getModelAnswer();
-        if (mounted.current) {
-          setSolution(response);
-          onModelAnswerViewed?.();
-        }
-      }
-    } catch (caught) {
-      if (mounted.current)
-        setError(caught instanceof Error ? caught.message : "Kunne ikke hente læringsstøtten.");
-    } finally {
-      running.current = false;
-      if (mounted.current) setBusy(null);
-    }
-  }
+  const result = assessment?.result;
 
   return (
     <section className="case-feedback" aria-label="Tilbakemelding og løsningsforslag">
@@ -113,27 +61,34 @@ export function CaseFeedbackPanel({
         begge før du fullfører.
       </p>
       <div className="case-learning-actions">
-        <Button disabled={disabled || busy !== null} onClick={() => void run("feedback")}>
+        <Button disabled={disabled || busy !== null} onClick={learning.requestFeedback}>
           {busy === "feedback"
             ? "Vurderer besvarelsen …"
             : result
-              ? "Vurder svarene på nytt"
+              ? feedbackIsCurrent
+                ? "Vurder svarene på nytt"
+                : "Vurder oppdaterte svar"
               : "Få tilbakemelding"}
         </Button>
-        {getModelAnswer && (
+        {hasModelAnswer && (
           <Button
             variant="outline"
-            disabled={disabled || busy !== null}
-            onClick={() => void run("solution")}
+            disabled={disabled || (busy !== null && !solution)}
+            onClick={learning.toggleSolution}
           >
             {busy === "solution"
               ? "Henter løsningsforslag …"
-              : solution || modelAnswerViewed
-                ? "Vis løsningsforslaget igjen"
-                : "Se løsningsforslag"}
+              : solutionOpen
+                ? "Skjul løsningsforslag"
+                : solution
+                  ? "Vis løsningsforslaget igjen"
+                  : "Se løsningsforslag"}
           </Button>
         )}
       </div>
+      <p className="case-learning-note">
+        Tilbakemelding og løsningsforslag beholdes mens casen er åpen. Kopier det du vil ta vare på.
+      </p>
       {solutionUsed && <p className="case-solution-marker">Øvd med løsningsforslag</p>}
       {busy && (
         <p role="status">
@@ -143,15 +98,26 @@ export function CaseFeedbackPanel({
         </p>
       )}
       {error && <p role="alert">{error}</p>}
-      {assessment && !result && (
-        <p role="status">
-          Svarene eller øvingsgrunnlaget er endret. Be om ny tilbakemelding på den aktuelle
-          besvarelsen.
+      {assessment && !feedbackIsCurrent && (
+        <p className="case-feedback-version" role="status">
+          Svarene er endret. Tilbakemeldingen nedenfor gjelder den forrige besvarelsen. Be om ny
+          tilbakemelding når du vil vurdere de oppdaterte svarene.
         </p>
       )}
       {result && (
-        <div aria-label="Tilbakemelding på aktuell besvarelse">
-          <h3>Helhetsvurdering</h3>
+        <div
+          aria-label={
+            feedbackIsCurrent
+              ? "Tilbakemelding på aktuell besvarelse"
+              : "Tilbakemelding på tidligere besvarelse"
+          }
+        >
+          <h3>{feedbackIsCurrent ? "Helhetsvurdering" : "Helhetsvurdering av tidligere svar"}</h3>
+          {solutionUsed && assessment && !assessment.solutionViewed && (
+            <p className="case-learning-note">
+              Denne tilbakemeldingen ble hentet før løsningsforslaget ble åpnet.
+            </p>
+          )}
           <p className="case-answer-text">{result.feedback.summary}</p>
           {result.feedback.questions.map((item) => (
             <article className="case-feedback-item" key={item.questionId}>
@@ -165,10 +131,10 @@ export function CaseFeedbackPanel({
               {item.evidence && <blockquote>«{item.evidence}»</blockquote>}
               {(
                 [
+                  ["Viktige hensyn", item.safety],
                   ["Styrker", item.strengths],
                   ["Utvikle videre", item.improvements],
                   ["Forsvarlige alternativer", item.alternatives],
-                  ["Viktige hensyn", item.safety],
                 ] as const
               ).map(
                 ([title, items]) =>
@@ -187,11 +153,18 @@ export function CaseFeedbackPanel({
                 <strong>Neste steg:</strong> {item.nextStep}
               </p>
               <Sources ids={item.sourceIds} sources={result.sources} />
+              <Button
+                variant="outline"
+                onClick={() => onEditQuestion(item.questionId)}
+                disabled={disabled}
+              >
+                Rediger dette svaret
+              </Button>
             </article>
           ))}
         </div>
       )}
-      {solution && (
+      {solution && solutionOpen && (
         <section className="case-model-answer" aria-label="Begrunnet løsningsforslag">
           <h3>Løsningsforslag</h3>
           <p className="case-answer-text">{solution.modelAnswer.summary}</p>
@@ -215,6 +188,13 @@ export function CaseFeedbackPanel({
                 ))}
               </ul>
               <Sources ids={item.sourceIds} sources={solution.sources} />
+              <Button
+                variant="outline"
+                onClick={() => onEditQuestion(item.questionId)}
+                disabled={disabled}
+              >
+                Arbeid videre med dette svaret
+              </Button>
             </article>
           ))}
         </section>

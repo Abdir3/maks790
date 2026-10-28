@@ -40,6 +40,7 @@ import {
 import { PartSituation, QuestionPrompt } from "@/components/case-content";
 import { useCaseDraft } from "@/hooks/use-case-draft";
 import { useCaseDictation } from "@/hooks/use-case-dictation";
+import { useCaseLearning } from "@/hooks/use-case-learning";
 import {
   allQuestions,
   answeredCount,
@@ -144,6 +145,39 @@ export function CaseWorkspace({
     [update],
   );
   const dictation = useCaseDictation(append);
+  const learning = useCaseLearning({
+    definition,
+    answers: draft.answers,
+    assess: onAssess,
+    getModelAnswer: onModelAnswer,
+    solutionViewed: solutionUsed,
+    disabled: !ready || dictation.busy,
+  });
+
+  useEffect(() => {
+    if (
+      !ready ||
+      !(review || completed) ||
+      readerOpen ||
+      !learning.solution ||
+      !learning.solutionOpen ||
+      draft.modelAnswerViewedAt
+    )
+      return;
+    update((current) => ({
+      ...current,
+      modelAnswerViewedAt: current.modelAnswerViewedAt ?? new Date().toISOString(),
+    }));
+  }, [
+    ready,
+    review,
+    completed,
+    readerOpen,
+    learning.solution,
+    learning.solutionOpen,
+    draft.modelAnswerViewedAt,
+    update,
+  ]);
 
   // Let the whole page scroll when enlarged text or the keyboard leaves too
   // little room for independent panes. Measure actual content, not device names.
@@ -167,7 +201,15 @@ export function CaseWorkspace({
     chrome.forEach((element) => observer.observe(element));
     measure();
     return () => observer.disconnect();
-  }, [part.id, review, completed, storageError, dictation.status, dictation.message]);
+  }, [
+    part.id,
+    review,
+    completed,
+    storageError,
+    dictation.status,
+    dictation.message,
+    learning.busy,
+  ]);
 
   useLayoutEffect(() => {
     if (!ready || review || completed) return;
@@ -183,16 +225,21 @@ export function CaseWorkspace({
     }
   }, [part.id, draft.tab, ready, desktop, review, completed]);
 
-  const openQuestion = (question: LocatedQuestion) => {
+  const openQuestion = (question: LocatedQuestion, resumeEditing = false) => {
     if (!definition.parts.some((p) => p.id === question.partId)) return;
-    if (completed) {
+    if (completed && !resumeEditing) {
       document.getElementById(`review-${question.id}`)?.scrollIntoView({ block: "start" });
       return;
     }
     setReview(false);
     setFocusedQuestion(question.id);
     pendingFocus.current = question.id;
-    update((current) => ({ ...current, partId: question.partId, tab: "answer" }));
+    update((current) => ({
+      ...current,
+      partId: question.partId,
+      tab: "answer",
+      completedAt: resumeEditing ? null : current.completedAt,
+    }));
     // Also handle a jump to another question in the currently visible panel.
     requestAnimationFrame(() => {
       const target = document.getElementById(`answer-${question.id}`);
@@ -220,7 +267,7 @@ export function CaseWorkspace({
     setReaderOpen(true);
   };
   const exit = () => {
-    if (storageError || dictation.busy) setConfirmation("exit");
+    if (storageError || dictation.busy || learning.busy) setConfirmation("exit");
     else onExit();
   };
   const showReview = () => {
@@ -257,7 +304,7 @@ export function CaseWorkspace({
         </div>
         <div className="case-progress-row">
           <span>
-            {completed ? "Besvarelse fullført" : progressLabel}
+            {completed ? "Markert som ferdig" : progressLabel}
             {solutionUsed && (
               <span className="case-solution-marker"> · Øvd med løsningsforslag</span>
             )}
@@ -358,17 +405,27 @@ export function CaseWorkspace({
           {dictation.message}
         </p>
       )}
+      {learning.busy && !review && !completed && (
+        <p className="case-notice" role="status">
+          {learning.busy === "feedback"
+            ? "Tilbakemeldingen er under arbeid."
+            : "Løsningsforslaget er under arbeid."}{" "}
+          Du kan fortsette å skrive.
+        </p>
+      )}
 
       {review || completed ? (
         <>
           <div className="case-review-scroll" ref={reviewPanel}>
             <div className="case-review-intro">
               <span className="case-review-icon">{completed ? <CheckCheck /> : <FileText />}</span>
-              <p className="case-eyebrow">{completed ? "Fullført" : "Besvarelse og øving"}</p>
+              <p className="case-eyebrow">
+                {completed ? "Markert som ferdig" : "Besvarelse og øving"}
+              </p>
               <h2>{completed ? "Besvarelsen din" : "Se gjennom besvarelsen"}</h2>
               <p>
                 {completed
-                  ? "Oppgavene og svarene dine er samlet her."
+                  ? "Oppgavene og svarene dine er samlet her. Du kan fortsette å redigere når du vil."
                   : onAssess
                     ? "Les over svarene dine. Du kan gå tilbake og redigere, også etter at du har fått tilbakemelding."
                     : "Les over svarene dine. Du kan gå tilbake og redigere før du fullfører."}
@@ -380,6 +437,19 @@ export function CaseWorkspace({
                 </p>
               )}
             </div>
+            {onAssess && (
+              <CaseFeedbackPanel
+                definition={definition}
+                learning={learning}
+                hasModelAnswer={Boolean(onModelAnswer)}
+                solutionUsed={solutionUsed}
+                disabled={!ready || dictation.busy}
+                onEditQuestion={(questionId) => {
+                  const question = questions.find((item) => item.id === questionId);
+                  if (question) openQuestion(question, true);
+                }}
+              />
+            )}
             {definition.parts.map(
               (item, index) =>
                 questionsForPart(item).length > 0 && (
@@ -409,44 +479,43 @@ export function CaseWorkspace({
                             ? draft.answers[question.id]
                             : "Ikke besvart"}
                         </p>
-                        {!completed && (
-                          <Button variant="outline" onClick={() => openQuestion(question)}>
-                            Rediger {question.label.toLocaleLowerCase("nb-NO")}
-                            <ArrowRight aria-hidden="true" />
-                          </Button>
-                        )}
+                        <Button
+                          variant="outline"
+                          onClick={() => openQuestion(question, true)}
+                          disabled={!ready || dictation.busy}
+                        >
+                          Rediger {question.label.toLocaleLowerCase("nb-NO")}
+                          <ArrowRight aria-hidden="true" />
+                        </Button>
                       </article>
                     ))}
                   </section>
                 ),
             )}
-            {onAssess && (
-              <CaseFeedbackPanel
-                definition={definition}
-                answers={draft.answers}
-                assess={onAssess}
-                {...(onModelAnswer ? { getModelAnswer: onModelAnswer } : {})}
-                modelAnswerViewed={Boolean(draft.modelAnswerViewedAt)}
-                solutionUsed={solutionUsed}
-                disabled={!ready || dictation.busy}
-                onModelAnswerViewed={() =>
-                  update((current) => ({
-                    ...current,
-                    modelAnswerViewedAt: current.modelAnswerViewedAt ?? new Date().toISOString(),
-                  }))
-                }
-              />
-            )}
           </div>
           <footer className="case-actionbar">
             {completed ? (
               <>
-                <Button variant="outline" onClick={() => setConfirmation("reset")}>
+                <Button
+                  variant="ghost"
+                  onClick={() => setConfirmation("reset")}
+                  disabled={!ready || dictation.busy || learning.busy !== null}
+                >
                   <RotateCcw />
                   Start på nytt
                 </Button>
-                <Button onClick={exit}>
+                <Button variant="outline" onClick={exit}>
                   Til forsiden
+                  <ArrowRight />
+                </Button>
+                <Button
+                  disabled={!ready || dictation.busy}
+                  onClick={() => {
+                    const question = activeQuestion ?? questions[0];
+                    if (question) openQuestion(question, true);
+                  }}
+                >
+                  Fortsett å redigere
                   <ArrowRight />
                 </Button>
               </>
@@ -463,7 +532,7 @@ export function CaseWorkspace({
                     reviewPanel.current?.scrollTo(0, 0);
                   }}
                 >
-                  Fullfør case
+                  Marker som ferdig
                   <Check />
                 </Button>
               </>
@@ -661,7 +730,9 @@ export function CaseWorkspace({
                 ? "Dette erstatter den lagrede besvarelsen for denne casen på denne enheten."
                 : dictation.busy
                   ? "Dikteringen pågår. Hvis du forlater casen nå, avbrytes opptaket eller transkriberingen. Allerede lagrede svar beholdes."
-                  : "Svarene kunne ikke lagres på denne enheten. Kopier dem før du forlater casen hvis du vil beholde dem."}
+                  : storageError
+                    ? "Svarene kunne ikke lagres på denne enheten. Kopier dem før du forlater casen hvis du vil beholde dem."
+                    : "En tilbakemelding eller et løsningsforslag er fortsatt under arbeid. Hvis du forlater casen, beholdes ikke resultatet av denne forespørselen i visningen."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -669,7 +740,8 @@ export function CaseWorkspace({
             <AlertDialogAction
               onClick={() => {
                 if (confirmation === "reset") {
-                  if (!dictation.busy) {
+                  if (!dictation.busy && !learning.busy) {
+                    learning.reset();
                     reset();
                     setReview(false);
                     positions.current = {};
@@ -677,7 +749,7 @@ export function CaseWorkspace({
                 } else onExit();
                 setConfirmation(null);
               }}
-              disabled={confirmation === "reset" && dictation.busy}
+              disabled={confirmation === "reset" && (dictation.busy || learning.busy !== null)}
             >
               {confirmation === "reset" ? "Start på nytt" : "Forlat casen"}
             </AlertDialogAction>

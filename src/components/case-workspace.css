@@ -1104,3 +1104,24 @@
 .case-feedback-question {
   color: #d5c8df;
 }
+.case-review-scroll > .case-feedback {
+  max-width: 780px;
+  margin-top: 0;
+  margin-bottom: 2rem;
+  border: 1px solid var(--case-border);
+  border-radius: 0.85rem;
+  background: #17121e;
+}
+.case-feedback-version {
+  padding: 0.8rem 1rem;
+  border-left: 3px solid #d9ab89;
+  background: #d9ab890c;
+  color: #edcfb5;
+}
+.case-feedback-item > button {
+  max-width: 100%;
+  height: auto;
+  min-height: 2.5rem;
+  padding-block: 0.6rem;
+  white-space: normal;
+}

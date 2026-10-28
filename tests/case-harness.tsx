@@ -120,6 +120,9 @@ export function Harness() {
   const [index, setIndex] = useState(0);
   const [largeText, setLargeText] = useState(false);
   const [storageFailure, setStorageFailure] = useState(false);
+  const [feedbackCalls, setFeedbackCalls] = useState(0);
+  const [solutionCalls, setSolutionCalls] = useState(0);
+  const [slowResponses, setSlowResponses] = useState(false);
   const definition = fixtures[index]!;
   return (
     <>
@@ -133,6 +136,9 @@ export function Harness() {
           padding: 4,
           height: 40,
           fontSize: 12,
+          maxWidth: "100vw",
+          overflowX: "auto",
+          whiteSpace: "nowrap",
         }}
       >
         <label>
@@ -172,6 +178,18 @@ export function Harness() {
           />
           Lagringsfeil
         </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={slowResponses}
+            onChange={(event) => setSlowResponses(event.target.checked)}
+          />
+          Trege svar
+        </label>
+        <span role="status">
+          {" "}
+          Vurderinger: {feedbackCalls} · Løsninger: {solutionCalls}
+        </span>
       </div>
       <style>{`html { font-size: ${largeText ? 32 : 16}px; } .case-workspace { padding-bottom: 40px; }`}</style>
       <CaseWorkspace
@@ -180,47 +198,57 @@ export function Harness() {
         onExit={() => setIndex((value) => (value + 1) % fixtures.length)}
         {...(definition.practice?.version === 3
           ? {
-              onAssess: async (answers: Record<string, string>, solutionViewed?: boolean) => ({
-                feedback: {
-                  summary: `Simulert tilbakemelding for nettlesertest. Ingen reell modellvurdering.${solutionViewed ? " Øvd med løsningsforslag." : ""}`,
-                  questions: allQuestions(definition).flatMap(
-                    (q) => feedbackFixture(q.id, answers[q.id] ?? "").questions,
-                  ),
-                },
-                sources: [
-                  {
-                    id: "assignment-2",
-                    title: "Testkilde",
-                    url: "https://example.com",
-                    scope: "Kun testdata.",
+              onAssess: async (answers: Record<string, string>, solutionViewed?: boolean) => {
+                setFeedbackCalls((count) => count + 1);
+                if (slowResponses) await new Promise((resolve) => setTimeout(resolve, 2500));
+                return {
+                  feedback: {
+                    summary: `Simulert tilbakemelding for nettlesertest. Ingen reell modellvurdering.${solutionViewed ? " Øvd med løsningsforslag." : ""}`,
+                    questions: allQuestions(definition).flatMap(
+                      (q) => feedbackFixture(q.id, answers[q.id] ?? "").questions,
+                    ),
                   },
-                ],
-              }),
-              onModelAnswer: async () => ({
-                modelAnswer: {
-                  summary:
-                    "Simulert løsningsforslag for nettlesertest. Ingen reell modellvurdering.",
-                  questions: allQuestions(definition).map((q) => ({
-                    questionId: q.id,
-                    explanation:
-                      "Begrunn vurderingen med opplysningene som forelå på dette tidspunktet. Sammenhold ny funksjonssvikt med tidligere funksjon, legemiddelinntak og observasjoner.",
-                    keyFindings: [
-                      "Endring fra tidligere funksjon og oppmerksomhet.",
-                      "Lite inntak og behov for komparentopplysninger.",
-                    ],
-                    alternatives: ["Flere samtidige forklaringer må vurderes ut fra videre funn."],
-                    sourceIds: ["assignment-2"],
-                  })),
-                },
-                sources: [
-                  {
-                    id: "assignment-2",
-                    title: "Testkilde",
-                    url: "https://example.com",
-                    scope: "Kun testdata.",
+                  sources: [
+                    {
+                      id: "assignment-2",
+                      title: "Testkilde",
+                      url: "https://example.com",
+                      scope: "Kun testdata.",
+                    },
+                  ],
+                };
+              },
+              onModelAnswer: async () => {
+                setSolutionCalls((count) => count + 1);
+                if (slowResponses) await new Promise((resolve) => setTimeout(resolve, 2500));
+                return {
+                  modelAnswer: {
+                    summary:
+                      "Simulert løsningsforslag for nettlesertest. Ingen reell modellvurdering.",
+                    questions: allQuestions(definition).map((q) => ({
+                      questionId: q.id,
+                      explanation:
+                        "Begrunn vurderingen med opplysningene som forelå på dette tidspunktet. Sammenhold ny funksjonssvikt med tidligere funksjon, legemiddelinntak og observasjoner.",
+                      keyFindings: [
+                        "Endring fra tidligere funksjon og oppmerksomhet.",
+                        "Lite inntak og behov for komparentopplysninger.",
+                      ],
+                      alternatives: [
+                        "Flere samtidige forklaringer må vurderes ut fra videre funn.",
+                      ],
+                      sourceIds: ["assignment-2"],
+                    })),
                   },
-                ],
-              }),
+                  sources: [
+                    {
+                      id: "assignment-2",
+                      title: "Testkilde",
+                      url: "https://example.com",
+                      scope: "Kun testdata.",
+                    },
+                  ],
+                };
+              },
             }
           : {})}
       />
