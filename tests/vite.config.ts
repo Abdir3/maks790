@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
 
 export default defineConfig({
+  cacheDir: "node_modules/.vite-case-harness",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

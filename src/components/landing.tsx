@@ -30,26 +30,26 @@ const information = {
   fagomrader: {
     label: "Fagområder",
     title: "Akuttmedisin, steg for steg",
-    description: "Velg mellom fall i hjemmet og akutte pustevansker.",
+    description: "Øv med faste caser eller lag nye innen tolv fagområder.",
     body: "Utforsk pasienthistorien, kliniske funn og tilgjengelige undersøkelser. Arbeid videre med differensialdiagnoser, behandling og refleksjon.",
   },
   "slik-fungerer-det": {
     label: "Slik fungerer det",
     title: "Les. Vurder. Forklar.",
     description: "Velg en case og arbeid med oppgavene i eget tempo.",
-    body: "Les hele casen samlet, eller gå mellom situasjon og oppgaver. Skriv eller dikter svaret ditt. Du kan redigere alle svar frem til du fullfører.",
+    body: "Les situasjonen og begrunn valgene dine. Nye pasientforløp åpnes del for del. Skriv eller dikter svaret ditt. Du kan redigere frem til fullføring og be om KI-tilbakemelding på nye caser.",
   },
   faq: {
     label: "FAQ",
     title: "Før du begynner",
     description: "Du kan starte øvingscasen uten å opprette en konto.",
-    body: "Øvingsknappene åpner caseoversikten. Tidsangivelsene er forslag til øvingslengde. Svar lagres på denne enheten og deles ikke mellom enheter. Diktering krever mikrofontilgang og en tilgjengelig transkriberingstjeneste.",
+    body: "Faste caser er åpne. Nye caser og KI-tilbakemelding krever innlogging. Tidsangivelsene er forslag til øving, ikke eksamenskrav. Svar lagres på denne enheten. Diktering krever mikrofontilgang og en tilgjengelig transkriberingstjeneste. Øvingen er ikke offisiell eksamen eller sensur.",
   },
   profil: {
     label: "Profil",
-    title: "Øv uten innlogging",
-    description: "Øvingscasen er åpen og klar til bruk.",
-    body: "Du trenger ingen konto. Kladdene dine lagres på denne enheten. Personlig profil og synkronisering mellom enheter er ikke tilgjengelig.",
+    title: "Faste og personlige caser",
+    description: "Faste øvingscaser kan brukes uten konto.",
+    body: "Logg inn for å lage og hente dine genererte caser. Svarutkast lagres bare på denne enheten og synkroniseres ikke mellom enheter.",
   },
 } as const;
 

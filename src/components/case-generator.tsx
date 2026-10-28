@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useCallback, useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,21 +9,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
-import { planCase, saveGeneratedCase, writeStage } from "@/lib/cases.functions";
-import { START_SETTINGS } from "@/lib/case-variety";
+import { generateCase } from "@/lib/cases.functions";
+import {
+  START_SETTINGS,
+  TOPICS,
+  isTopicSettingCompatible,
+  type SettingId,
+  type Difficulty,
+} from "@/lib/case-variety";
 import type { CaseDefinition } from "@/lib/case-model";
-import type { CasePlan, GeneratedStage } from "@/lib/generated-case";
-
 export type GeneratorFormat = "long" | "quick";
-
 export function CaseGenerator({
   format,
   onClose,
@@ -35,50 +31,32 @@ export function CaseGenerator({
 }) {
   const navigate = useNavigate();
   const { user, ready } = useAuth();
-  const plan = useServerFn(planCase);
-  const stage = useServerFn(writeStage);
-  const save = useServerFn(saveGeneratedCase);
-
-  const [stages, setStages] = useState("4");
-  const [startSetting, setStartSetting] = useState<string>(START_SETTINGS[0].label);
-  const [status, setStatus] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
+  const generate = useServerFn(generateCase);
+  const [stages, setStages] = useState(4);
+  const [startSetting, setStartSetting] = useState<SettingId>("auto");
+  const [difficulty, setDifficulty] = useState<Difficulty>("advanced");
+  const [topic, setTopic] = useState("auto");
+  const [busy, setBusy] = useState(false);
+  const running = useRef(false);
   const [error, setError] = useState<string | null>(null);
-  const busy = status !== null;
-
-  const run = useCallback(async () => {
-    if (!format) return;
-    const total = format === "long" ? Number(stages) : 1;
+  const compatible = isTopicSettingCompatible(topic, startSetting, format ?? undefined);
+  async function run() {
+    if (!format || !ready || !user || running.current || !compatible) return;
+    running.current = true;
+    setBusy(true);
     setError(null);
-    setProgress(0);
-    setStatus("Trekker en ny variant …");
     try {
-      const planned = await plan({
-        data: { format, stages: total, startSetting: format === "long" ? startSetting : "auto" },
+      const result = await generate({
+        data: { format, stages: format === "quick" ? 1 : stages, startSetting, difficulty, topic },
       });
-      const parts: GeneratedStage[] = [];
-      const count = planned.plan.stages.length;
-      for (let index = 0; index < count; index += 1) {
-        setStatus(`Skriver del ${index + 1} av ${count} …`);
-        setProgress(Math.round(((index + 0.2) / count) * 100));
-        const result = await stage({
-          data: { plan: planned.plan as CasePlan, index, format },
-        });
-        parts.push(result.stage as GeneratedStage);
-        setProgress(Math.round(((index + 1) / count) * 100));
-      }
-      setStatus("Lagrer casen …");
-      const saved = await save({
-        data: { plan: planned.plan as CasePlan, stages: parts, meta: planned.meta },
-      });
-      setStatus(null);
-      onReady(saved.definition as CaseDefinition);
+      onReady(result.definition);
     } catch (caught) {
-      setStatus(null);
       setError(caught instanceof Error ? caught.message : "Kunne ikke lage casen. Prøv igjen.");
+    } finally {
+      running.current = false;
+      setBusy(false);
     }
-  }, [format, onReady, plan, save, stage, stages, startSetting]);
-
+  }
   return (
     <Dialog
       open={format !== null}
@@ -91,82 +69,96 @@ export function CaseGenerator({
     >
       <DialogContent className="case-library-dialog">
         <DialogHeader>
-          <p className="case-eyebrow">MAKS790 / Ny case</p>
+          <p className="case-eyebrow">MAKS790 / Ny øvingscase</p>
           <DialogTitle className="text-2xl">
-            {format === "quick" ? "Kort repetisjon" : "Lang eksamenscase"}
+            {format === "quick" ? "Kort klinisk case" : "Lang eksamensøving"}
           </DialogTitle>
           <DialogDescription className="pt-2">
             {format === "quick"
-              ? "Én situasjon, én vanskelig beslutning. Cirka 10–15 minutter."
-              : "Én pasient, én sammenhengende historie gjennom flere deler."}
+              ? "Vurder mest sannsynlig diagnose, tolk funnene og forklar hva de betyr for videre håndtering."
+              : "Et komplett pasientforløp med åpne oppgaver. Hele casen er tilgjengelig fra starten."}
           </DialogDescription>
         </DialogHeader>
-
         {ready && !user ? (
           <div className="space-y-4">
-            <p className="text-sm leading-6 text-foreground/80">
-              Du må være innlogget for å lage nye caser. Da husker vi også hvilke du har hatt, slik
-              at neste case blir annerledes.
-            </p>
+            <p>Logg inn for å lage caser og få variasjon basert på tidligere øving.</p>
             <Button onClick={() => void navigate({ to: "/auth" })}>Logg inn</Button>
           </div>
         ) : (
           <div className="space-y-5">
-            {format === "long" && !busy && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="space-y-2 text-sm">
-                  <span className="text-muted-foreground">Antall deler</span>
-                  <Select value={stages} onValueChange={setStages}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["3", "4", "5", "6"].map((value) => (
-                        <SelectItem key={value} value={value}>
-                          {value} deler
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            {!busy && (
+              <div className="case-generator-fields">
+                <label>
+                  Tema (valgfritt)
+                  <select value={topic} onChange={(e) => setTopic(e.target.value)}>
+                    <option value="auto">Varier mellom pensumtemaene</option>
+                    {TOPICS.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
-                <label className="space-y-2 text-sm">
-                  <span className="text-muted-foreground">Historien starter</span>
-                  <Select value={startSetting} onValueChange={setStartSetting}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {START_SETTINGS.map((item) => (
-                        <SelectItem key={item.id} value={item.label}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <label>
+                  Startsted
+                  <select
+                    value={startSetting}
+                    onChange={(e) => setStartSetting(e.target.value as SettingId)}
+                  >
+                    {START_SETTINGS.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
+                <label>
+                  Faglig utfordring
+                  <select
+                    value={difficulty}
+                    onChange={(e) => setDifficulty(e.target.value as Difficulty)}
+                  >
+                    <option value="advanced">Avansert – selvstendig vurdering</option>
+                    <option value="complex">Kompleks – flere hensyn i konflikt</option>
+                  </select>
+                </label>
+                {format === "long" && (
+                  <label>
+                    Antall deler
+                    <select value={stages} onChange={(e) => setStages(Number(e.target.value))}>
+                      {[3, 4, 5, 6].map((n) => (
+                        <option key={n} value={n}>
+                          {n} deler
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {!compatible && (
+                  <p role="alert">Tema og startsted passer ikke sammen. Velg et annet startsted.</p>
+                )}
               </div>
             )}
-
+            <p className="text-sm leading-6 text-muted-foreground">
+              Du kan skrive eller diktere, få tilbakemelding og se løsningsforslag. KI-støttet øving
+              gir ikke karakter.
+            </p>
             {busy && (
-              <div className="space-y-3">
-                <p className="text-sm text-foreground/80">{status}</p>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-[#ff825e] transition-[width] duration-500"
-                    style={{ width: `${Math.max(progress, 6)}%` }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Dette tar gjerne ett til to minutter. Ikke lukk vinduet.
+              <div role="status" aria-live="polite" className="space-y-2">
+                <p>Lager et sammenhengende forløp og kontrollerer kvaliteten …</p>
+                <p className="text-sm text-muted-foreground">
+                  Det kan ta flere minutter. Casen åpnes først når kontrollen er ferdig.
                 </p>
               </div>
             )}
-
-            {error && <p className="text-sm text-[#ef565c]">{error}</p>}
-
+            {error && (
+              <p role="alert" className="text-sm text-[#ef565c]">
+                {error}
+              </p>
+            )}
             {!busy && (
-              <Button onClick={() => void run()} className="justify-self-start">
-                {error ? "Prøv igjen" : "Lag casen"}
+              <Button disabled={!ready || !user || !compatible} onClick={() => void run()}>
+                {error ? "Prøv igjen" : "Lag øvingscase"}
               </Button>
             )}
           </div>

@@ -9,6 +9,88 @@ import {
 } from "@tanstack/react-router";
 import { CaseWorkspace } from "../src/components/case-workspace";
 import { browserFixtures } from "./case-fixtures";
+import { generatedDefinition, generatedFixture, feedbackFixture, draw } from "./generator-fixtures";
+import { allQuestions, type CaseDefinition, type ClinicalResultGroup } from "../src/lib/case-model";
+import { buildDefinition } from "../src/lib/generated-case";
+const investigations: ClinicalResultGroup[] = [
+  {
+    id: "harness-laboratory",
+    kind: "laboratory",
+    title: "Laboratorieprøver",
+    timestamp: "Dag 1, 15:05",
+    sampleType: "Venøst blod",
+    values: [
+      { id: "sodium", label: "Natrium", value: "137", unit: "mmol/L", referenceRange: "137–145" },
+      { id: "potassium", label: "Kalium", value: "4,3", unit: "mmol/L", referenceRange: "3,5–4,6" },
+      {
+        id: "creatinine",
+        label: "Kreatinin",
+        value: "112",
+        unit: "µmol/L",
+        referenceRange: "45–90",
+        note: "Tidligere verdi: 82 µmol/L",
+      },
+    ],
+  },
+  {
+    id: "harness-blood-gas",
+    kind: "blood-gas",
+    title: "Blodgass",
+    timestamp: "Dag 1, 15:10",
+    sampleType: "Venøs prøve",
+    oxygen: "Romluft ved prøvetaking",
+    findings:
+      "Referanseområder vurderes sammen med prøvetype og laboratoriets metode. Referansen i denne nettlesertesten er kun testdata.",
+    sourceUrl: "https://example.com/blood-gas-reference",
+    values: [
+      { id: "ph", label: "pH", value: "7,32" },
+      { id: "pco2", label: "pCO₂", value: "6,5", unit: "kPa" },
+      { id: "po2", label: "pO₂", value: "4,8", unit: "kPa" },
+      { id: "hco3", label: "HCO₃⁻", value: "25", unit: "mmol/L" },
+      { id: "base-excess", label: "Baseoverskudd", value: "−1", unit: "mmol/L" },
+      { id: "lactate", label: "Laktat", value: "1,4", unit: "mmol/L" },
+    ],
+  },
+  {
+    id: "harness-ecg",
+    kind: "ecg",
+    title: "EKG-rapport",
+    timestamp: "Dag 1, 15:15",
+    values: [],
+    findings: "Sinusrytme, 88/min. Ingen akutte ST-forandringer.",
+    conclusion: "Ingen akutte iskemiske EKG-forandringer.",
+  },
+  {
+    id: "harness-imaging",
+    kind: "imaging",
+    title: "Bildediagnostisk rapport",
+    timestamp: "Dag 1, 15:30",
+    values: [],
+    findings: "Røntgen thorax viser ingen fokale fortetninger eller pleuravæske.",
+    conclusion: "Ingen akutte funn på røntgen thorax.",
+  },
+];
+function withInvestigations(definition: CaseDefinition): CaseDefinition {
+  return {
+    ...definition,
+    practice: { version: 3, difficulty: "complex", sequential: false },
+    parts: definition.parts.map((part, index) => ({
+      ...part,
+      ...(index === 0 ? { investigations } : {}),
+    })),
+  };
+}
+const legacy = buildDefinition("legacy-harness", generatedFixture(), draw);
+const fixtures = [
+  ...browserFixtures,
+  withInvestigations(generatedDefinition),
+  withInvestigations(buildDefinition("quick-harness", generatedFixture(1), draw)),
+  {
+    ...legacy,
+    title: "Eldre øvingscase (v2)",
+    practice: { version: 2, difficulty: "complex", sequential: true },
+  } satisfies CaseDefinition,
+];
 import "../src/styles.css";
 
 // Test-only microphone: no access to the user's actual audio devices.
@@ -38,7 +120,7 @@ export function Harness() {
   const [index, setIndex] = useState(0);
   const [largeText, setLargeText] = useState(false);
   const [storageFailure, setStorageFailure] = useState(false);
-  const definition = browserFixtures[index]!;
+  const definition = fixtures[index]!;
   return (
     <>
       <div
@@ -60,7 +142,7 @@ export function Harness() {
             value={index}
             onChange={(event) => setIndex(Number(event.target.value))}
           >
-            {browserFixtures.map((item, i) => (
+            {fixtures.map((item, i) => (
               <option key={item.id} value={i}>
                 {item.title}
               </option>
@@ -95,7 +177,52 @@ export function Harness() {
       <CaseWorkspace
         key={definition.id}
         definition={definition}
-        onExit={() => setIndex((value) => (value + 1) % browserFixtures.length)}
+        onExit={() => setIndex((value) => (value + 1) % fixtures.length)}
+        {...(definition.practice?.version === 3
+          ? {
+              onAssess: async (answers: Record<string, string>, solutionViewed?: boolean) => ({
+                feedback: {
+                  summary: `Simulert tilbakemelding for nettlesertest. Ingen reell modellvurdering.${solutionViewed ? " Øvd med løsningsforslag." : ""}`,
+                  questions: allQuestions(definition).flatMap(
+                    (q) => feedbackFixture(q.id, answers[q.id] ?? "").questions,
+                  ),
+                },
+                sources: [
+                  {
+                    id: "assignment-2",
+                    title: "Testkilde",
+                    url: "https://example.com",
+                    scope: "Kun testdata.",
+                  },
+                ],
+              }),
+              onModelAnswer: async () => ({
+                modelAnswer: {
+                  summary:
+                    "Simulert løsningsforslag for nettlesertest. Ingen reell modellvurdering.",
+                  questions: allQuestions(definition).map((q) => ({
+                    questionId: q.id,
+                    explanation:
+                      "Begrunn vurderingen med opplysningene som forelå på dette tidspunktet. Sammenhold ny funksjonssvikt med tidligere funksjon, legemiddelinntak og observasjoner.",
+                    keyFindings: [
+                      "Endring fra tidligere funksjon og oppmerksomhet.",
+                      "Lite inntak og behov for komparentopplysninger.",
+                    ],
+                    alternatives: ["Flere samtidige forklaringer må vurderes ut fra videre funn."],
+                    sourceIds: ["assignment-2"],
+                  })),
+                },
+                sources: [
+                  {
+                    id: "assignment-2",
+                    title: "Testkilde",
+                    url: "https://example.com",
+                    scope: "Kun testdata.",
+                  },
+                ],
+              }),
+            }
+          : {})}
       />
     </>
   );

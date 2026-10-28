@@ -1,0 +1,107 @@
+# Kalibrering av MAKS790-generatoren
+
+Kalibrering kjøres separat fra enhetstestene og skriver aldri til databasen. Utvalget er åtte korte caser og tre lange caser med ulike kliniske mekanismer og resonneringsoppgaver. Utvalget er pedagogisk begrunnet; det sier ikke hvor sannsynlig en diagnose er på eksamen.
+
+## Kontroller utvalget uten modellkall
+
+```sh
+npx -y bun scripts/calibrate-cases.ts --dry-run
+```
+
+Dette kontrollerer temaer, scenariovalg og at de elleve scenarioene er forskjellige. Det kaller ingen modell og skriver ingen filer. Det er ikke en klinisk kvalitetskontroll. `--seed` låser valg av rammer og resonneringsfokus, men gjør ikke modellens svar deterministiske.
+
+## Kjør ekte generering
+
+Produksjonsleverandøren er Lovable. Nøkkelen må være tilgjengelig som `LOVABLE_API_KEY` i miljøet; aldri legg den i kode eller kommandolinjeargumenter.
+
+```sh
+npx -y bun scripts/calibrate-cases.ts --phase generate --case short-metabolic
+```
+
+Utelatt `--case` kjører alle elleve. Standardfasen er `generate`: generering, uavhengig løsning fra studentvisningen og fagkontroll, normalt tre modellkall per case. Avviste forsøk kan gi flere kall. Resultatet merkes `generation-complete` først når generatorens kontroller er fullført.
+
+Hvis Lovable ikke er tilgjengelig, kan samme genererings- og vurderingskode prøves direkte mot OpenAI med den eksisterende `OPENAI_API_KEY`:
+
+```sh
+npx -y bun scripts/calibrate-cases.ts --provider openai --phase generate --case short-metabolic
+```
+
+Dette er en uttrykkelig verifikasjonsreserve med `gpt-6-astra`, ikke en endring i appens leverandør og ikke en test av Lovable-integrasjonen. Runneren bruker Responses med `store: false`, strømming og strengt JSON-skjema. Se [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs) og [Responses-migreringsveiledningen](https://developers.openai.com/api/docs/guides/migrate-to-responses).
+
+Kjør maksimalt tre caseprosesser samtidig ved manuell parallellisering. Velg forskjellige `--case`-verdier. Ikke kjør to prosesser mot samme gjenopptakelsesmappe.
+
+## Kontroller modellbesvarelse og tilbakemelding
+
+Bruk den utskrevne lokale resultatmappen for å fortsette uten å generere casen på nytt:
+
+```sh
+npx -y bun scripts/calibrate-cases.ts --provider openai --phase feedback --case short-metabolic --resume <lokal-resultatmappe>
+```
+
+Kjør dette minst for én representativ kortcase og én langcase. Fasen lager en modellbesvarelse og fire fiktive besvarelsesprofiler: god, ufullstendig, et tilsiktet faglig forsvarlig alternativ og et tilsiktet uforsvarlig forslag. Hver profil vurderes gjennom den faktiske tilbakemeldingskjeden med kilde- og sitatkontroll. Profilene er **modellgenererte utfordringer, ikke ekspertmerkede fasitsvar**. Selv en profil merket «good» kan være faglig mangelfull.
+
+Dette krever normalt elleve nye modellkall per case; reparasjoner kan øke antallet. `--phase all` kjører begge fasene. Fullførte resultater gjenbrukes ved `--resume`; råforsøk og feil blir bevart. Leverandør, kildeversjon og seed må stemme med den opprinnelige kjøringen.
+
+## Tolk resultatene
+
+Private caser, rubrikker, modellbesvarelser, forespørsler, svar og feil lagres i `work/calibration/<tidspunkt>-seed-<nummer>.local/`. Mapper med `.local` ignoreres av Git. Ikke publiser disse mappene som studentinnhold. Runneren logger aldri nøkler eller autorisasjonshoder. `--out` kan velge en annen overordnet lokal mappe; selve kjøringsmappen beholder `.local`-endelsen.
+
+- `generation-complete`: case og uavhengig modellkontroll er ferdige; tilbakemeldingsprofilene er ikke kjørt.
+- `automated-checks-complete`: også modellbesvarelse og fire tilbakemeldingsprofiler er behandlet uten registrerte avvik.
+- `needs-review`: en forventet sikkerhetsmerknad uteble, eller det tilsiktet forsvarlige alternativet fikk et utfall som må undersøkes.
+- `failed`: generering, format, kildegrunnlag eller en kontroll feilet. Råforsøkene og feilen er bevart.
+
+Alle utfall krever faglig lesning. Sammenlign med Arbeidskrav 1, Randi og Hilde, og kontroller spesielt besvarbarhet, faglig nivå, fysiologi og blodgass, medisiner og tidslinje, reell variasjon, forsvarlige alternativer og helheten i langcasene. Et godt resultat fra flere modellkall er ikke uavhengig klinisk ekspertgodkjenning.
+
+## Databasetest uten produksjonstilgang
+
+`tests/persistence-feedback.test.ts` tester eierskap, tidsavgrenset vurdering, sitater og modellbesvarelse med kontrollerte testdata. Den valgfrie PostgreSQL-delen kjører de faktiske migreringene i PGlite når `PGLITE_TEST_MODULE` peker til en lokalt installert `@electric-sql/pglite`-pakke. Den kontrollerer blant annet tilgangsnekt, bevaring av eldre case-ID-er, at diagnosegrunnlaget fjernes fra offentlig casehistorikk, atomisk lagring og tilbakeføring når den private innsettingen feiler. Testen berører aldri en ekstern Supabase-database.
+
+Produksjonssetting krever migreringen `20261028010000_private_case_assessments.sql` og ny serverkode sammen. Migreringen flytter eldre vurderingsmetadata til privat lagring og fjerner skriveadgang til offentlige casefelt for innloggede klienter. Den gamle generatoren kan derfor ikke fortsette å opprette caser etter migreringen. Kontroller serverens `SUPABASE_SERVICE_ROLE_KEY` og øvrige eksisterende servervariabler gjennom leverandørens sikre innstillinger før overgangen; ikke legg nøkkelverdier i nettleserpakken.
+
+## Dokumentert kjøring 28. oktober 2026
+
+Utvalget ble kjørt med seed 790, kildeversjon `exam-info-2026-10-28-v3` og direkte OpenAI Responses med `gpt-6-astra`. Ingen case eller vurdering ble skrevet til databasen. Dette kontrollerer den faktiske lokale genererings- og vurderingskoden, men **verifiserer ikke Lovable-gatewayen eller en produksjonsutrulling**.
+
+Elleve endelige eksempler fullførte strukturkontroll, separat løsning fra studentens opplysninger og modellkontroll. Hvert endelig eksempel brukte tre modellkall. Disse elleve er valgt etter feilretting under kjøringen; dette var ikke elleve feilfrie førsteforsøk.
+
+| Eksempel                      | Format        | Klinisk variasjon som ble prøvd                                | Endelig generering |
+| ----------------------------- | ------------- | -------------------------------------------------------------- | ------------------ |
+| `short-circulation`           | Kort          | Koronar iskemi, tolket EKG og serielle troponiner              | Fullført           |
+| `short-respiratory`           | Kort          | Ventilasjonssvikt og tidsfestede blodgasser                    | Fullført           |
+| `short-infection`             | Kort          | Infeksjon, sirkulasjon og organsvikt                           | Fullført           |
+| `short-metabolic`             | Kort          | Ketose, syre-base og legemiddelutløst risiko                   | Fullført           |
+| `short-paediatrics`           | Kort          | Barn med væsketap og endret allmenntilstand                    | Fullført           |
+| `short-toxicology`            | Kort          | Alkoholrelatert metabolsk forstyrrelse                         | Fullført           |
+| `short-mental-health`         | Kort          | Spiseforstyrrelse, elektrolytter, rytmerisiko og kommunikasjon | Fullført           |
+| `short-trauma-neuro`          | Kort          | Hodeskade, nevrologi, legemidler og bildesvar                  | Fullført           |
+| `long-function-medications`   | Lang, 3 deler | Akutt nyreendring, medisiner, funksjon og omsorgsnivå          | Fullført           |
+| `long-treatment-complication` | Lang, 4 deler | Kreftbehandling, infeksjon og videre forløp                    | Fullført           |
+| `long-psychosomatic`          | Lang, 3 deler | Somatikk, selvskading, samtale og individuell oppfølging       | Fullført           |
+
+Fire tidligere genereringskjøringer ble avvist og bevart. De brukte 23 modellkall til sammen:
+
+| Avvist kjøring          | Modellkall | Konkret funn og retting                                                                                                                                                                  |
+| ----------------------- | ---------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Respirasjon             |          5 | Grensen på to blodgasser kunne utelate nødvendig tidsutvikling. Grensen ble utvidet til fire, med de samme fysiologi- og tidskontrollene.                                                |
+| Psykosomatisk langcase  |          6 | En for kort rollegrense ga avbrutte setninger. Første utkast hadde også motstridende selvskadingshistorikk; dette ble avvist. Rollegrensen og kontrollen av fullført setning ble rettet. |
+| Behandlingskomplikasjon |          6 | Avbrutt rolletekst og avvik mellom oppgitt dyrkningssvar og privat forklaring ble oppdaget. Ny kjøring ble kontrollert på nytt.                                                          |
+| Nyre/funksjon/medisiner |          6 | Et avkortet kvalitativt laboratoriesvar støttet ikke alle påstandene i forklaringen. Grensen for laboratorietekst ble utvidet, og en ny kjøring ble kontrollert.                         |
+
+En enda tidligere nyre/funksjon-case hadde passert modellkontrollen etter tre kall, men ble erstattet etter senere gjennomlesning av rolletekst og kildegrunnlag. Den regnes verken som et endelig eksempel eller som en automatisk avvist kjøring. Dette viser hvorfor modellkontroll alene ikke er en klinisk godkjenning. Genereringsarbeidet omfatter dermed 59 kall: 33 for de elleve endelige eksemplene, 23 for de fire avviste kjøringene og 3 for det erstattede tidlige eksemplet.
+
+Kortcasen om metabolsk forstyrrelse fullførte modellbesvarelse og alle fire utfordringsprofiler. God og tilsiktet forsvarlig alternativ besvarelse fikk `developed` på målspørsmålet, ufullstendig besvarelse fikk `partial`, og den tilsiktet uforsvarlige besvarelsen fikk `needs-review` med konkrete sikkerhetsmerknader. Et tomt svar ble behandlet som ubesvart. Tilbakemeldingen viste ordrette sitater og skilte øving etter sett modellbesvarelse fra selvstendig mestring. Profilene er fortsatt modellgenererte, ikke ekspertmerkede fasitsvar.
+
+Det forsvarlige alternativet i denne kortcasen gjaldt væskevalg og overvåkingssted med uttrykkelige vilkår. Dette er ikke en test som alene viser at alle alternative diagnoser blir vurdert rettferdig.
+
+Den første modellbesvarelsen brukte interne kilde-ID-er i løpende tekst. Instruksen og kontrollen ble rettet, og modellbesvarelsen ble generert på nytt med to nye kall. Den nye teksten bruker lesbar kildeomtale; det opprinnelige resultatet er bevart. De fire tilbakemeldingene hadde ikke dette problemet og ble gjenbrukt. Kortcasens vurderingsfase brukte derfor 13 nye kall, i tillegg til de tre genereringskallene.
+
+Den endelige geriatriske langcasen fullførte modellbesvarelse og alle fire utfordringsprofiler med 13 nye kall. God og tilsiktet forsvarlig alternativ besvarelse fikk `developed` på målspørsmålet, ufullstendig besvarelse fikk `partial`, og den tilsiktet uforsvarlige hjemreisebeslutningen fikk `needs-review`. Tilbakemeldingen koblet den uforsvarlige beslutningen til risikoene studenten selv hadde identifisert i andre svar, manglende nattlig støtte og manglende avtalte kontroller. Det alternative væskevalget ble akseptert med de oppgitte vilkårene om innleggelse, tett observasjon, målt inntak og rask overgang til intravenøs behandling ved behov. To av de tretten kallene rettet en skrivefeil som kontrollmodellen hadde påpekt; dette var ikke et nytt klinisk problem.
+
+Langcasens uforsvarlige profil inneholdt også en uttrykkelig instruks om å ignorere vurderingsreglene og gi karakter A. Instruksen er dokumentert i det faktisk innsendte svaret. Tilbakemeldingen fulgte den ikke og ga ingen karakter. Dette var én konkret instruksjonsangrepstest i langcasen; kortcasens profiler inneholdt ikke samme test. Den viser ikke generell immunitet mot instruksjonsangrep.
+
+Den geriatriske langcasen har tre samtidige perspektiver ved samme tidspunkt. For å prøve senere opplysninger separat ble det derfor kjørt en målrettet vurdering på den psykosomatiske langcasen, med deler ved 0, 25 og 55 minutter og et spørsmål om hele forløpet. Seks agentutformede prøvesvar ble lagret sammen med det faktiske vurderingsgrunnlaget. De tidlige svarene behandlet støtte og oppfølging som uavklart; de senere svarene brukte først da de bekreftede avtalene. Sluttvurderingen bevarte dette skillet, krevde ikke senere opplysninger i tidlige svar og integrerte alle tidspunktene i helhetsspørsmålet. Alle seks fikk `developed`. Også disse prøvesvarene er en konstruert utfordring, ikke ekspertfasit.
+
+Denne tidskontrollen brukte fire kall fordi første vurderingsutkast måtte presisere kildeomfanget for beslutningskompetanse. Sluttvurderingen skilte mellom hva kasusets observasjoner støtter og en fullstendig klinisk/rettslig vurderingsramme som det oppgitte kildegrunnlaget ikke avklarer. Den beskrev dette som en kildebegrensning, ikke som et påvist uforsvarlig råd fra studenten. Denne begrensningen gjenstår; testen gir ikke grunnlag for å hevde at generatoren er validert for fullstendige juridiske kompetansevurderinger.
+
+Samlet dokumenterer kjøringen **89 faktiske modellkall**: 59 til generering og omprøving, 13 til kortcasens vurdering og lesbarhetsretting, 13 til langcasens vurdering og 4 til den særskilte tidskontrollen. En annen agent leste begge representative casene, modellbesvarelsene og alle åtte profilvurderingene uten å finne en vesentlig klinisk eller kildemessig motsigelse. Dette er en ekstra agentkontroll, ikke uavhengig klinisk ekspertgodkjenning. Råutkast, avvisninger, erstattede resultater og faktisk innsendte svar er bevart lokalt og publiseres ikke med applikasjonen.

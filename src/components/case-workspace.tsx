@@ -32,6 +32,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CaseReader } from "@/components/case-reader";
+import {
+  CaseFeedbackPanel,
+  type AssessAnswers,
+  type GetModelAnswer,
+} from "@/components/case-feedback";
 import { PartSituation, QuestionPrompt } from "@/components/case-content";
 import { useCaseDraft } from "@/hooks/use-case-draft";
 import { useCaseDictation } from "@/hooks/use-case-dictation";
@@ -73,9 +78,13 @@ function useWorkspaceViewport() {
 export function CaseWorkspace({
   definition,
   onExit,
+  onAssess,
+  onModelAnswer,
 }: {
   definition: CaseDefinition;
   onExit: () => void;
+  onAssess?: AssessAnswers;
+  onModelAnswer?: GetModelAnswer;
 }) {
   const { draft, ready, update, reset, storageError, recoveryError } = useCaseDraft(definition);
   const { desktop, height } = useWorkspaceViewport();
@@ -85,9 +94,14 @@ export function CaseWorkspace({
   const partQuestions = questionsForPart(part);
   const count = answeredCount(definition, draft.answers);
   const completed = draft.completedAt !== null;
+  const solutionUsed = Boolean(
+    draft.modelAnswerViewedAt &&
+    (!draft.completedAt || Date.parse(draft.modelAnswerViewedAt) <= Date.parse(draft.completedAt)),
+  );
   const [review, setReview] = useState(false);
   const [readerOpen, setReaderOpen] = useState(false);
   const [readerStart, setReaderStart] = useState<string | null>(null);
+  const initialReadingHandled = useRef(false);
   const [confirmation, setConfirmation] = useState<"reset" | "exit" | null>(null);
   const [focusedQuestion, setFocusedQuestion] = useState("");
   const workspace = useRef<HTMLElement>(null);
@@ -100,6 +114,18 @@ export function CaseWorkspace({
   const activeQuestion =
     partQuestions.find((question) => question.id === focusedQuestion) ?? partQuestions[0];
   const followingQuestion = activeQuestion && nextQuestion(definition, activeQuestion.id);
+
+  useEffect(() => {
+    if (!ready || initialReadingHandled.current) return;
+    initialReadingHandled.current = true;
+    if (
+      definition.practice?.version === 3 &&
+      definition.parts.length > 1 &&
+      !completed &&
+      count === 0
+    )
+      setReaderOpen(true);
+  }, [ready, definition, completed, count]);
 
   const append = useCallback(
     (questionId: string, text: string) => {
@@ -158,6 +184,7 @@ export function CaseWorkspace({
   }, [part.id, draft.tab, ready, desktop, review, completed]);
 
   const openQuestion = (question: LocatedQuestion) => {
+    if (!definition.parts.some((p) => p.id === question.partId)) return;
     if (completed) {
       document.getElementById(`review-${question.id}`)?.scrollIntoView({ block: "start" });
       return;
@@ -229,7 +256,12 @@ export function CaseWorkspace({
           </Button>
         </div>
         <div className="case-progress-row">
-          <span>{completed ? "Besvarelse fullført" : progressLabel}</span>
+          <span>
+            {completed ? "Besvarelse fullført" : progressLabel}
+            {solutionUsed && (
+              <span className="case-solution-marker"> · Øvd med løsningsforslag</span>
+            )}
+          </span>
           <span className="case-save-status" aria-live="polite">
             <Save aria-hidden="true" />
             {!ready ? "Åpner kladd …" : storageError ? "Ikke lagret" : "Lagret på enheten"}
@@ -332,12 +364,14 @@ export function CaseWorkspace({
           <div className="case-review-scroll" ref={reviewPanel}>
             <div className="case-review-intro">
               <span className="case-review-icon">{completed ? <CheckCheck /> : <FileText />}</span>
-              <p className="case-eyebrow">{completed ? "Fullført" : "Før du fullfører"}</p>
+              <p className="case-eyebrow">{completed ? "Fullført" : "Besvarelse og øving"}</p>
               <h2>{completed ? "Besvarelsen din" : "Se gjennom besvarelsen"}</h2>
               <p>
                 {completed
                   ? "Oppgavene og svarene dine er samlet her."
-                  : "Les over svarene dine. Du kan gå tilbake og endre dem før du fullfører."}
+                  : onAssess
+                    ? "Les over svarene dine. Du kan gå tilbake og redigere, også etter at du har fått tilbakemelding."
+                    : "Les over svarene dine. Du kan gå tilbake og redigere før du fullfører."}
               </p>
               {count < questions.length && (
                 <p className="case-unanswered">
@@ -352,7 +386,9 @@ export function CaseWorkspace({
                   <section key={item.id} className="case-review-part">
                     {definition.parts.length > 1 && (
                       <h2>
-                        Del {index + 1} · {item.shortTitle ?? item.title}
+                        {item.shortTitle === `Del ${index + 1}`
+                          ? item.title
+                          : `Del ${index + 1} · ${item.shortTitle ?? item.title}`}
                       </h2>
                     )}
                     {questionsForPart(item).map((question) => (
@@ -383,6 +419,23 @@ export function CaseWorkspace({
                     ))}
                   </section>
                 ),
+            )}
+            {onAssess && (
+              <CaseFeedbackPanel
+                definition={definition}
+                answers={draft.answers}
+                assess={onAssess}
+                {...(onModelAnswer ? { getModelAnswer: onModelAnswer } : {})}
+                modelAnswerViewed={Boolean(draft.modelAnswerViewedAt)}
+                solutionUsed={solutionUsed}
+                disabled={!ready || dictation.busy}
+                onModelAnswerViewed={() =>
+                  update((current) => ({
+                    ...current,
+                    modelAnswerViewedAt: current.modelAnswerViewedAt ?? new Date().toISOString(),
+                  }))
+                }
+              />
             )}
           </div>
           <footer className="case-actionbar">
@@ -548,7 +601,7 @@ export function CaseWorkspace({
               disabled={!ready}
             >
               <FileText aria-hidden="true" />
-              Se gjennom
+              {onAssess ? "Svar og tilbakemelding" : "Se gjennom"}
             </Button>
             {partQuestions.length === 0 ? (
               <Button
