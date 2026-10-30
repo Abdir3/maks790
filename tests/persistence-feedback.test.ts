@@ -164,6 +164,9 @@ function fakeClient(results: Result[]) {
 describe("Private assessment persistence", () => {
   it("saves via one atomic RPC with the diagnostic basis separate from student content", async () => {
     const f = fixture();
+    f.assessment.modelResponses = [
+      { purpose: "case_draft_v3", response: { model: "gpt-6-astra", inputTokens: 321 } },
+    ];
     const admin = fakeClient([{ data: null, error: null }]);
     await saveCaseWithAssessment(admin.client, { ...f, id, userId: owner, format: "long" });
     assert.equal(admin.calls.length, 1);
@@ -173,6 +176,7 @@ describe("Private assessment persistence", () => {
     assert.equal(payload["p_user_id"], owner);
     assert.ok(!JSON.stringify(payload["p_definition"]).includes("privat-diagnose"));
     assert.ok(!JSON.stringify(payload["p_definition"]).includes("rubric"));
+    assert.ok(!JSON.stringify(payload["p_definition"]).includes("gpt-6-astra"));
     assert.equal((payload["p_semantic"] as typeof f.semantic).diagnosisFamily, "privat-diagnose");
     assert.deepEqual(payload["p_assessment"], f.assessment);
   });
@@ -242,6 +246,8 @@ describe("Private assessment persistence", () => {
       return loadOwnedAssessment(user.client, admin.client, owner, id);
     };
     assert.deepEqual((await run()).assessment, f.assessment);
+    const compatible = { ...f.assessment, sourceVersion: "exam-info-2026-10-28-v3" };
+    assert.deepEqual((await run(f.definition, compatible)).assessment, compatible);
     await assert.rejects(run({ ...f.definition, title: "Changed case" }), /samsvarer ikke/);
     await assert.rejects(
       run(f.definition, { ...f.assessment, sourceVersion: "old" }),
@@ -292,18 +298,86 @@ function feedbackFor(
       strengths: answers[question.id]
         ? ["Du begrunner behovet for å sammenligne med vanlig funksjon."]
         : [],
-      improvements: ["Beskriv hvilke nye funn som ville endret planen."],
-      alternatives: [
-        "Observasjon kan være forsvarlig med avtalt ansvar og rask tilgang til ny vurdering.",
-      ],
+      improvements: answers[question.id]
+        ? ["Beskriv hvilke nye funn som ville endret planen."]
+        : [],
+      alternatives: answers[question.id]
+        ? ["Observasjon kan være forsvarlig med avtalt ansvar og rask tilgang til ny vurdering."]
+        : [],
       safety: [],
-      nextStep: "Knytt ett konkret funn til et begrunnet neste tiltak.",
-      sourceIds: ["assignment-2", "geriatrics"],
+      nextStep: answers[question.id]
+        ? "Knytt ett konkret funn til et begrunnet neste tiltak."
+        : "Prøv å besvare oppgaven med en kort begrunnelse før du ber om tilbakemelding.",
+      sourceIds: answers[question.id] ? ["assignment-2", "geriatrics"] : [],
     })),
   };
 }
 
 describe("Whole-submission feedback and model answer", () => {
+  it("does not spend a model request on an entirely empty submission", async () => {
+    const f = fixture();
+    let calls = 0;
+    await assert.rejects(
+      generateFeedback(
+        f.definition,
+        f.assessment,
+        { [allQuestions(f.definition)[0]!.id]: " \n\t " },
+        async () => {
+          calls++;
+          return {};
+        },
+      ),
+      /minst én oppgave/,
+    );
+    assert.equal(calls, 0);
+  });
+  it("removes all generated advice from blank questions before the independent review", async () => {
+    const f = fixture();
+    const ids = allQuestions(f.definition).map((q) => q.id);
+    const answers = { [ids[0]!]: "Jeg vil sammenligne med tidligere funksjon." };
+    const clean = feedbackFor(f.definition, answers);
+    const leaking = structuredClone(clean);
+    leaking.questions[1]!.improvements = ["Den ubesvarte oppgaven løses med denne diagnosen."];
+    leaking.questions[1]!.nextStep = "Her er en full løsning på den ubesvarte oppgaven.";
+    leaking.questions[1]!.status = "developed";
+    leaking.questions[1]!.evidence = "Et oppdiktet studentsitat.";
+    leaking.questions[1]!.strengths = ["En oppdiktet styrke."];
+    leaking.questions[1]!.alternatives = ["Et lekket løsningsalternativ."];
+    leaking.questions[1]!.safety = ["En lekket handlingsplan."];
+    leaking.questions[1]!.sourceIds = ["geriatrics"];
+    let drafts = 0;
+    let reviews = 0;
+    const result = await generateFeedback(f.definition, f.assessment, answers, async (request) => {
+      if (request.schemaName === "case_feedback_v3") {
+        drafts++;
+        return leaking;
+      }
+      reviews++;
+      const reviewedFeedback = JSON.parse(
+        request.input.slice(request.input.indexOf("DATA: ") + 6),
+      ).feedback;
+      assert.deepEqual(reviewedFeedback.questions[1], clean.questions[1]);
+      return review;
+    });
+    assert.equal(drafts, 1);
+    assert.equal(reviews, 1);
+    assert.deepEqual(result, clean);
+  });
+  it("assesses a short attempt without treating it as a blank answer", async () => {
+    const f = fixture();
+    const id = allQuestions(f.definition)[0]!.id;
+    for (const answer of ["Delirium", "Vet ikke"]) {
+      const answers = { [id]: answer };
+      const expected = feedbackFor(f.definition, answers);
+      expected.questions[0]!.status = "needs-review";
+      expected.questions[0]!.alternatives = [];
+      const result = await generateFeedback(f.definition, f.assessment, answers, async (request) =>
+        request.schemaName === "case_feedback_v3" ? expected : review,
+      );
+      assert.equal(result.questions[0]!.evidence, answer);
+      assert.equal(result.questions[0]!.status, "needs-review");
+    }
+  });
   it("includes other perspectives at the same time but excludes later clinical findings", () => {
     const f = fixture();
     f.assessment.generated.stages[1]!.elapsedMinutes = 0;
@@ -391,6 +465,7 @@ describe("Whole-submission feedback and model answer", () => {
       })),
     };
     const requests: Parameters<JsonGenerator>[0][] = [];
+    expected.questions[0]!.alternatives = [];
     const answer = await generateModelAnswer(f.definition, f.assessment, async (request) => {
       requests.push(request);
       return request.schemaName === "case_model_answer_v3" ? expected : review;
@@ -401,6 +476,7 @@ describe("Whole-submission feedback and model answer", () => {
       assessmentContext(f.definition, f.assessment).tasks,
     );
     assert.equal("answers" in JSON.parse(requests[0]!.input), false);
+    assert.equal(requests.length, 2); // Empty alternatives do not bypass clinical review.
   });
 });
 

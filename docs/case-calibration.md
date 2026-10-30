@@ -1,14 +1,15 @@
 # Kalibrering av MAKS790-generatoren
 
-Kalibrering kjøres separat fra enhetstestene og skriver aldri til databasen. Utvalget er åtte korte caser og tre lange caser med ulike kliniske mekanismer og resonneringsoppgaver. Utvalget er pedagogisk begrunnet; det sier ikke hvor sannsynlig en diagnose er på eksamen.
+Kalibrering kjøres separat fra enhetstestene og skriver aldri til databasen. Standardutvalget `core` er åtte korte caser og tre lange caser med ulike kliniske mekanismer og resonneringsoppgaver. `catalog` velger ett eksempel fra hvert av de 53 scenarioene, hvorav 14 er lange. Utvalgene er pedagogisk begrunnet; de sier ikke hvor sannsynlig en diagnose er på eksamen.
 
 ## Kontroller utvalget uten modellkall
 
 ```sh
 npx -y bun scripts/calibrate-cases.ts --dry-run
+npx -y bun scripts/calibrate-cases.ts --suite catalog --dry-run
 ```
 
-Dette kontrollerer temaer, scenariovalg og at de elleve scenarioene er forskjellige. Det kaller ingen modell og skriver ingen filer. Det er ikke en klinisk kvalitetskontroll. `--seed` låser valg av rammer og resonneringsfokus, men gjør ikke modellens svar deterministiske.
+Dette kontrollerer temaer, scenariovalg og at scenarioene i valgt utvalg er forskjellige. Det kaller ingen modell og skriver ingen filer. Det er ikke en klinisk kvalitetskontroll. `--seed` låser valg av rammer og resonneringsfokus, men gjør ikke modellens svar deterministiske.
 
 ## Kjør ekte generering
 
@@ -18,7 +19,7 @@ Produksjonsleverandøren er Lovable. Nøkkelen må være tilgjengelig som `LOVAB
 npx -y bun scripts/calibrate-cases.ts --phase generate --case short-metabolic
 ```
 
-Utelatt `--case` kjører alle elleve. Standardfasen er `generate`: generering, uavhengig løsning fra studentvisningen og fagkontroll, normalt tre modellkall per case. Avviste forsøk kan gi flere kall. Resultatet merkes `generation-complete` først når generatorens kontroller er fullført.
+Utelatt `--case` kjører hele valgt utvalg. For katalogen brukes for eksempel `--suite catalog --case catalog-anaphylaxis`. Standardfasen er `generate`: generering, uavhengig løsning fra studentvisningen og fagkontroll, normalt tre modellkall per case. Avviste forsøk kan gi flere kall. Resultatet merkes `generation-complete` først når generatorens kontroller er fullført.
 
 Hvis Lovable ikke er tilgjengelig, kan samme genererings- og vurderingskode prøves direkte mot OpenAI med den eksisterende `OPENAI_API_KEY`:
 
@@ -40,7 +41,7 @@ npx -y bun scripts/calibrate-cases.ts --provider openai --phase feedback --case 
 
 Kjør dette minst for én representativ kortcase og én langcase. Fasen lager en modellbesvarelse og fire fiktive besvarelsesprofiler: god, ufullstendig, et tilsiktet faglig forsvarlig alternativ og et tilsiktet uforsvarlig forslag. Hver profil vurderes gjennom den faktiske tilbakemeldingskjeden med kilde- og sitatkontroll. Profilene er **modellgenererte utfordringer, ikke ekspertmerkede fasitsvar**. Selv en profil merket «good» kan være faglig mangelfull.
 
-Dette krever normalt elleve nye modellkall per case; reparasjoner kan øke antallet. `--phase all` kjører begge fasene. Fullførte resultater gjenbrukes ved `--resume`; råforsøk og feil blir bevart. Leverandør, kildeversjon og seed må stemme med den opprinnelige kjøringen.
+Dette krever normalt elleve nye modellkall per case; reparasjoner kan øke antallet. `--phase all` kjører begge fasene. Fullførte resultater gjenbrukes ved `--resume`; råforsøk og feil blir bevart. Leverandør, kildeversjon, seed, utvalg og utførelsesmodus må stemme med den opprinnelige kjøringen. Manifestet lagrer også en SHA-256 av runneren og de elleve implementasjonsfilene som bestemmer generering og vurdering. Endret kode eller et eldre manifest uten denne bindingen krever en ny kjøring. En kontrollert testgenerator kan ikke gjenopptas som dokumentasjon på faktiske modellkall.
 
 ## Tolk resultatene
 
@@ -50,6 +51,10 @@ Private caser, rubrikker, modellbesvarelser, forespørsler, svar og feil lagres 
 - `automated-checks-complete`: også modellbesvarelse og fire tilbakemeldingsprofiler er behandlet uten registrerte avvik.
 - `needs-review`: en forventet sikkerhetsmerknad uteble, eller det tilsiktet forsvarlige alternativet fikk et utfall som må undersøkes.
 - `failed`: generering, format, kildegrunnlag eller en kontroll feilet. Råforsøkene og feilen er bevart.
+- `provider-error`: leverandøren kunne ikke fullføre, for eksempel fordi kreditten var brukt opp. Dette er ikke en klinisk avvisning.
+- `not-run`: eksemplet ble ikke forsøkt etter leverandørfeil tidligere i kjøringen. Det teller ikke som testet eller avvist case.
+
+Runneren stopper nye modellkall i resten av utvalget etter en leverandørfeil. Faktisk modellnavn, respons-ID og begrenset bruksmetadata registreres når leverandøren returnerer dem. Et konfigurert modellnavn alene er ikke bevis på hvilken modell som faktisk svarte. Disse metadataene og vurderingsgrunnlaget holdes utenfor studentvisningen.
 
 Alle utfall krever faglig lesning. Sammenlign med Arbeidskrav 1, Randi og Hilde, og kontroller spesielt besvarbarhet, faglig nivå, fysiologi og blodgass, medisiner og tidslinje, reell variasjon, forsvarlige alternativer og helheten i langcasene. Et godt resultat fra flere modellkall er ikke uavhengig klinisk ekspertgodkjenning.
 
@@ -57,9 +62,27 @@ Alle utfall krever faglig lesning. Sammenlign med Arbeidskrav 1, Randi og Hilde,
 
 `tests/persistence-feedback.test.ts` tester eierskap, tidsavgrenset vurdering, sitater og modellbesvarelse med kontrollerte testdata. Den valgfrie PostgreSQL-delen kjører de faktiske migreringene i PGlite når `PGLITE_TEST_MODULE` peker til en lokalt installert `@electric-sql/pglite`-pakke. Den kontrollerer blant annet tilgangsnekt, bevaring av eldre case-ID-er, at diagnosegrunnlaget fjernes fra offentlig casehistorikk, atomisk lagring og tilbakeføring når den private innsettingen feiler. Testen berører aldri en ekstern Supabase-database.
 
-Produksjonssetting krever migreringen `20261028010000_private_case_assessments.sql` og ny serverkode sammen. Migreringen flytter eldre vurderingsmetadata til privat lagring og fjerner skriveadgang til offentlige casefelt for innloggede klienter. Den gamle generatoren kan derfor ikke fortsette å opprette caser etter migreringen. Kontroller serverens `SUPABASE_SERVICE_ROLE_KEY` og øvrige eksisterende servervariabler gjennom leverandørens sikre innstillinger før overgangen; ikke legg nøkkelverdier i nettleserpakken.
+Den opprinnelige overgangen til V3 krever migreringen `20261028010000_private_case_assessments.sql` og tilhørende serverkode sammen. Migreringen flytter eldre vurderingsmetadata til privat lagring og fjerner skriveadgang til offentlige casefelt for innloggede klienter. Den eldre generatoren kan derfor ikke fortsette å opprette caser etter migreringen. Dette er en eksisterende V3-forutsetning, ikke en ny migrering for V4-kandidaten. Hemmelige servervariabler, blant annet `SUPABASE_SERVICE_ROLE_KEY`, skal aldri legges i nettleserpakken.
 
-## Dokumentert kjøring 28. oktober 2026
+## Gjennomgang 29.–30. oktober 2026
+
+Denne gjennomgangen undersøkte V3-baseline og førte til kandidatendringer i V4. Den ga **23 nye aksepterte caser**, hvorav åtte gjennom direkte OpenAI og femten gjennom den publiserte appen. Det var 17 korte og seks lange caser, med 22 registrerte scenario-ID-er. Den første produksjonscasen om hyponatremi mangler bevart scenario-ID og telles ikke som en 23. dokumentert ID. Katalogdekning er derfor 22 av produksjonens 52 scenarioer, ikke full katalogvalidering. V4 har i tillegg et nytt anafylaksiscenario.
+
+Alle 23 ble lest manuelt av agenten; utvalgte caser og kontrastbesvarelser ble drøftet med faktisk Claude Desktop i [kvalitetsgjennomgangen](https://claude.ai/chat/60ac3996-4d9a-491d-9633-b1566055a76e). De elleve endelige eksemplene fra 28. oktober ble lest på nytt separat og øker ikke antallet nye genereringer. Sammenligning av fem gamle/nye eksempler ga tekstlikhet 0,24–0,34, under sperren på 0,78. To ACS-caser hadde like navn, alder og bakgrunn, men ulike beslutningsfeller. Dette er grunnlag for å forbedre klinisk variasjon, ikke for å påstå at likhetssperren feilaktig avviste dem eller for å anslå en gjentakelsesrate.
+
+40 fullførte direkte OpenAI-responser oppga faktisk `gpt-6-astra`. Produksjonskoden var konfigurert med `openai/gpt-6-astra`; dens V3-responser bevarte ikke samme modellproveniens. Tallene for direkte responser er ikke et komplett antall produksjonskall. Tidligere kjøringers 89 kall nedenfor er heller ikke lagt til denne gjennomgangens tall.
+
+Det ble dessuten lest 23 målrettede produksjonstilbakemeldinger: ni for DKA, fem for hjertesvikt og ni for respirasjon, antibiotikavurdering og tidslinje. Kortfattede gode svar og flere betingede alternativer ble akseptert. Flytende, men farlige råd ble korrigert, blant annet å stanse nødvendig oksygen, overse forverret nevrologi etter smertelindring og bruke normal CO₂ som automatisk betryggelse ved utmattende astma. Delvis uttelling kunne være rimelig når svaret ikke besvarte hele spørsmålet. Testbesvarelsene er agent-/modellutformede utfordringer, ikke ekspertmerkede fasitsvar.
+
+Et bevisst feilaktig privat syre-base-grunnlag førte til at modellbesvarelsen ble stoppet. Tidlige spørsmål ble også prøvd med ulovlig bruk av senere MR-funn. Tomme enkeltbesvarelser fikk riktig ubesvart-status i V3, men kunne likevel få løsningsavslørende fritekst. V4 normaliserer derfor tomme svar før kontrollen og krever at også oppsummeringen respekterer dette. Det er lokalt regresjonstestet, men ennå ikke prøvd med nye faktiske Astra-svar.
+
+Abdominal- og barnetriageforsøk ble avvist uten at intern klinisk avvisningsgrunn var tilgjengelig fra produksjonen. Årsaken er ikke fastslått. Ett postoperativt forsøk og ett triageforsøk hadde tidsavbrudd; disse er heller ikke kliniske feilfunn. Testverktøyets Bun-socketgrense ble rettet, med fortsatt uttrykkelig total tidsfrist. Alle opprettede syntetiske testbrukere og deres data ble ryddet, og sletting kontrollert.
+
+Direkte OpenAI-kreditt ble brukt opp omtrent 21:44 UTC 29. oktober; Lovable AI-kreditt ble brukt opp 23:22 UTC. Den allerede startede direkte katalogbatchen fortsatte først til flere leverandørfeil. Dette avdekket at batchen ikke stoppet ved kredittfeil; stoppregelen er nå rettet og testet. Leverandørfeilene er ikke kliniske avvisninger eller fullførte Astra-responser. Modellkall ble deretter stanset, og ingen kreditt ble kjøpt. Juridiske og pediatriske kontrastprofiler som ble forberedt etter dette, er **ikke gjennomført**. V4s reviderte prompt, kilder og barnetriage er derfor ikke dokumentert med en ny full Astra-kjøring. Teknisk testing, gammel baseline og enighet med Claude erstatter ikke denne manglende testen.
+
+Se [verifikasjonsrapporten](case-generator-verification.md) for kandidatens tekniske kontroller og utrullingsstatus. Råcaser, innsendte svar, avvisninger, metadata og leselogger ligger i ignorerte lokale mapper.
+
+## Historisk kjøring 28. oktober 2026
 
 Utvalget ble kjørt med seed 790, kildeversjon `exam-info-2026-10-28-v3` og direkte OpenAI Responses med `gpt-6-astra`. Ingen case eller vurdering ble skrevet til databasen. Dette kontrollerer den faktiske lokale genererings- og vurderingskoden, men **verifiserer ikke Lovable-gatewayen eller en produksjonsutrulling**.
 

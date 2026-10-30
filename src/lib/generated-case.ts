@@ -97,32 +97,37 @@ function investigations(
       findings: refs.note,
       sourceUrl: refs.sourceUrl,
       values: [
-        { id: "ph", label: "pH", value: gas.pH.toFixed(2), referenceRange: refs.pH },
+        {
+          id: "ph",
+          label: "pH",
+          value: gas.pH.toFixed(2).replace(".", ","),
+          referenceRange: refs.pH,
+        },
         {
           id: "pco2",
           label: "pCO₂",
-          value: gas.pCO2.toFixed(2),
+          value: gas.pCO2.toFixed(2).replace(".", ","),
           unit: "kPa",
           referenceRange: refs.pCO2,
         },
         {
           id: "po2",
           label: "pO₂",
-          value: gas.pO2.toFixed(2),
+          value: gas.pO2.toFixed(2).replace(".", ","),
           unit: "kPa",
           referenceRange: refs.pO2,
         },
         {
           id: "hco3",
           label: "HCO₃⁻ (faktisk)",
-          value: gas.bicarbonate.toFixed(1),
+          value: gas.bicarbonate.toFixed(1).replace(".", ","),
           unit: "mmol/L",
           referenceRange: refs.bicarbonate,
         },
         {
           id: "be",
           label: "BE(Ecf), standard",
-          value: gas.baseExcess.toFixed(1),
+          value: gas.baseExcess.toFixed(1).replace(".", ","),
           unit: "mmol/L",
           referenceRange: refs.baseExcess,
         },
@@ -142,27 +147,39 @@ function investigations(
   );
   return groups;
 }
+function patientAge(ageYears: number): string {
+  const counted = (value: number, singular: string, plural: string) =>
+    `${value} ${value === 1 ? singular : plural}`;
+  if (ageYears >= 1) return `${ageYears.toLocaleString("nb-NO")} år`;
+  // Use completed units: rounding can cross the first-day or first-birthday
+  // boundary while the clinical reference logic still uses the original age.
+  if (ageYears >= 1 / 12)
+    return counted(Math.min(11, Math.floor(ageYears * 12 + 1e-9)), "måned", "måneder");
+  if (ageYears >= 1 / 365) return counted(Math.floor(ageYears * 365 + 1e-9), "dag", "dager");
+  if (ageYears >= 1 / (365 * 24))
+    return counted(Math.min(23, Math.floor(ageYears * 365 * 24 + 1e-9)), "time", "timer");
+  return ageYears > 0 ? "under én time gammel" : "nyfødt";
+}
 export function buildDefinition(
   id: string,
   generated: GeneratedCase,
   draw: VarietyDraw,
 ): CaseDefinition {
   let n = 0;
-  const age =
-    generated.ageYears >= 1
-      ? `${generated.ageYears.toLocaleString("nb-NO")} år`
-      : generated.ageYears >= 1 / 12
-        ? `${Math.round(generated.ageYears * 12)} måneder`
-        : generated.ageYears > 0
-          ? `${Math.max(1, Math.round(generated.ageYears * 365))} dager`
-          : "nyfødt";
+  const age = patientAge(generated.ageYears);
   const name = generated.patient
-    .replace(/[,\s(]*\d+(?:[.,]\d+)?\s*(?:år|måneder|uker|dager)(?: gammel)?[)\s.]*$/i, "")
+    .replace(
+      /[,\s(]*\d+(?:[.,]\d+)?\s*(?:år|måneder|måned|uker|uke|dager|dag|timer|time)(?: gammel)?[)\s.]*$/i,
+      "",
+    )
     .trim();
   return validateCase({
     id,
     title: `Vakt: ${draw.setting}`,
-    patient: `${name}, ${age}`,
+    // A single named header would visually nominate the priority child before
+    // the learner compares the initial presentations. Later parts name the
+    // child whose structured observations they contain.
+    ...(draw.blueprintId === "child-triage" ? {} : { patient: `${name}, ${age}` }),
     practice: { version: 3, difficulty: draw.difficulty, sequential: false },
     background: [
       { type: "paragraph", title: "Din rolle", text: generated.role },
@@ -178,7 +195,7 @@ export function buildDefinition(
           title: "Legemiddelopplysninger",
           items: stage.medications.map(
             (m) =>
-              `${m.name} (${m.activeIngredient}) · ${m.dose} · ${m.route}. ${m.schedule}. ${m.context === "given" ? "Gitt" : m.context === "reported" ? "Oppgitt inntak" : "Siste dose"}: ${timelineLabel(m.timeMinutes).toLocaleLowerCase("nb-NO")}.`,
+              `${m.name} (${m.activeIngredient}) · ${m.dose} · ${m.route.replace(/[.\s]+$/, "")}. ${m.schedule.replace(/[.\s]+$/, "")}. ${m.context === "given" ? "Gitt" : m.context === "reported" ? "Oppgitt inntak" : "Siste dose"}: ${timelineLabel(m.timeMinutes).toLocaleLowerCase("nb-NO")}.`,
           ),
         });
       return {

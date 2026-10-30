@@ -81,7 +81,10 @@ type Options = Partial<
     | "holisticFocus"
     | "trajectories"
   >
-> & { secondDecision?: (typeof DECISIONS)[number] };
+> & {
+  firstDecision?: (typeof DECISIONS)[number];
+  secondDecision?: (typeof DECISIONS)[number];
+};
 function b(
   id: string,
   topicId: string,
@@ -102,7 +105,12 @@ function b(
     mechanism,
     presentation,
     reasoningTargets: [
-      { id: "diagnostic", label: target, decision: DECISIONS[1], pivotalEvidence: evidence },
+      {
+        id: "diagnostic",
+        label: target,
+        decision: options.firstDecision ?? DECISIONS[1],
+        pivotalEvidence: evidence,
+      },
       {
         id: "applied",
         label: applied,
@@ -170,7 +178,14 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Integrere stuvningsfunn og hjertemarkører uten å gjøre ett funn diagnostisk",
     "Avveie stuvning, nyrefunksjon og legemiddelbruk",
-    ["geriatrics", "respiration", "deterioration"],
+    [
+      "geriatrics",
+      "respiration",
+      "deterioration",
+      "acute-kidney-current",
+      "heart-failure-current",
+      "heart-failure-decongestion",
+    ],
     { bloodGasRelevant: true },
   ),
   b(
@@ -217,7 +232,7 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Tolke pCO₂ i sammenheng med pustearbeid og utvikling",
     "Begrunne ventilasjonsvurdering ved utmattelse",
-    ["respiration", "first-actions"],
+    ["respiration", "first-actions", "adult-asthma-current"],
     { bloodGasRelevant: true },
   ),
   b(
@@ -233,7 +248,7 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Skille arytmirelatert synkope fra vasovagal episode og anfall",
     "Begrunne overvåking og legemiddelgjennomgang ved rytmerisiko",
-    ["syncope", "qt-risk", "fluid-balance"],
+    ["syncope", "qt-risk", "hydroxyzine-contraindications", "fluid-balance"],
   ),
   b(
     "orthostasis",
@@ -300,20 +315,36 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     { bloodGasRelevant: true, secondDecision: DECISIONS[3] },
   ),
   b(
+    "anaphylaxis",
+    "infection",
+    "anafylaksi",
+    "akutt systemisk overfølsomhetsreaksjon med luftveis- eller sirkulasjonspåvirkning",
+    "rask forverring etter mulig allergeneksponering",
+    [
+      "Eksponering, symptomdebut, allergihistorie og nylig gitte legemidler med tidspunkt",
+      "Luftveistegn, pustearbeid, hud/slimhinner, perfusjon og komplette vitalia",
+      "Tiltak som allerede er gitt og eventuell tidsfestet respons; laboratorier er ikke nødvendig for den første beslutningen",
+    ],
+    "Skille alvorlig systemisk reaksjon fra isolerte hudsymptomer og andre årsaker til kollaps",
+    "Prioritere umiddelbar behandling, hjelp og overvåking ut fra luftvei, pust og sirkulasjon",
+    ["anaphylaxis-current", "first-actions"],
+    { settings: faceToFace, secondDecision: DECISIONS[0] },
+  ),
+  b(
     "child-bronchiolitis",
     "pediatrics",
     "bronkiolitt",
     "nedre luftveisobstruksjon hos spedbarn",
     "spisevansker og økende pustearbeid",
     [
-      "Eksakt alder i måneder/døgn, vekt og prematuritet",
+      "Under ett år: eksakt alder i måneder/døgn, vekt og prematuritet",
       "Kontakt, pustearbeid, metning, drikke og bleier",
       "Foreldrenes beskrivelse og full undersøkelse",
     ],
     "Vurdere respirasjon og hydrering ut fra alder",
     "Prioritere forverring og begrunne omsorgsnivå",
-    ["pediatrics", "assignment-1"],
-    { minAge: 0, maxAge: 2, settings: ambulatory, secondDecision: DECISIONS[0] },
+    ["pediatrics", "assignment-1", "bronchiolitis-current"],
+    { minAge: 0, maxAge: 364 / 365, settings: ambulatory, secondDecision: DECISIONS[0] },
   ),
   b(
     "child-croup",
@@ -327,7 +358,7 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Skille øvre luftveisobstruksjon fra andre pustevansker",
     "Prioritere luftvei og trygg kontakt med barnet",
-    ["pediatrics", "first-actions"],
+    ["pediatrics", "first-actions", "croup-current"],
     { minAge: 0, maxAge: 8, settings: ambulatory, secondDecision: DECISIONS[0] },
   ),
   b(
@@ -343,7 +374,7 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Knytte dehydrering til syre-base og elektrolytter",
     "Begrunne observasjon av perfusjon og kontakt",
-    ["pediatrics", "fluid-balance"],
+    ["pediatrics", "fluid-balance", "pediatric-gastroenteritis", "pediatric-hypovolemia"],
     { minAge: 0, maxAge: 15, bloodGasRelevant: true },
   ),
   b(
@@ -353,14 +384,27 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     "forskjellig grad av respirasjons- og sirkulasjonspåvirkning",
     "flere barn med komplette presentasjoner",
     [
-      "Alder og vitalia for hvert barn",
+      "Tre–fire navngitte barn med eksakt alder og tydelig skille mellom det som er observert og ennå ikke målt",
       "Kontakt, pustearbeid, hud/perfusjon og foreldrebekymring",
-      "Alle prøvesvar som brukes i oppgaven",
+      "Førsteinntrykk som gir grunnlag for foreløpig prioritering; etterspør nødvendige første observasjoner uten å kreve en sikker diagnose fra manglende data",
+      "Alle barna presenteres i samme tekstformat i første del; ingen måletabell eller prøvesvar som visuelt fremhever ett barn",
     ],
     "Sammenligne klinisk alvorlighet fremfor køtid eller feber alene",
     "Begrunne prioritering og ny vurdering av ventende barn",
     ["pediatrics", "assignment-1"],
-    { minAge: 0, maxAge: 15, settings: ["legevakt", "mottak"], secondDecision: DECISIONS[0] },
+    {
+      minAge: 0,
+      maxAge: 15,
+      settings: ["legevakt", "mottak"],
+      formats: ["long"],
+      firstDecision: DECISIONS[0],
+      secondDecision: DECISIONS[3],
+      holisticFocus: [
+        "Prioritering ut fra aldersspesifikke faresignaler, med begrunnede alternativer der rekkefølgen er usikker",
+        "Ny vurdering av ventende barn ved nye observasjoner eller foreldrenes melding om endring",
+        "Kommunikasjon om venting og prioritering til familiene; bland alvorlig syke og mindre påvirkede barn",
+      ],
+    },
   ),
   b(
     "geriatric-delirium",
@@ -371,11 +415,19 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     [
       "Baseline kognisjon/funksjon og pårørendehistorie",
       "Oppmerksomhet, bevissthet og vitalia",
-      "Legemiddelendringer, infeksjonsfunn, glukose, elektrolytter og nyrefunksjon",
+      "Legemiddelendringer, infeksjonsfunn og glukose; elektrolytter/nyrefunksjon med tidskontekst når tilgjengelig eller nødvendig for spørsmålet",
     ],
     "Skille delirium fra demens og identifisere utløsende sykdom",
     "Integrere årsaksbehandling, trygghet og funksjon",
-    ["geriatrics", "liaison-psychiatry", "deterioration"],
+    [
+      "geriatrics",
+      "liaison-psychiatry",
+      "delirium-current",
+      "deterioration",
+      "decision-capacity",
+      "somatic-care-scope",
+      "somatic-care-resistance",
+    ],
     { minAge: 70, maxAge: 95 },
   ),
   b(
@@ -391,7 +443,13 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Vurdere akutt nyreendring og legemiddelbidrag",
     "Avveie volumstatus, medikamentrisiko og overvåking",
-    ["geriatrics", "fluid-balance", "acute-kidney-current", "nsaid-renal-current"],
+    [
+      "geriatrics",
+      "fluid-balance",
+      "acute-kidney-current",
+      "nsaid-renal-current",
+      "hyperkalemia-principles",
+    ],
     { minAge: 70, maxAge: 95, bloodGasRelevant: true },
   ),
   b(
@@ -407,7 +465,13 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Knytte akutt funksjonsendring til urinretensjon",
     "Revurdere symptomer og nyrefunksjon etter oppgitt avlastning",
-    ["geriatrics", "fluid-balance"],
+    [
+      "geriatrics",
+      "fluid-balance",
+      "decision-capacity",
+      "somatic-care-scope",
+      "somatic-care-resistance",
+    ],
     { minAge: 70, maxAge: 95, secondDecision: DECISIONS[3] },
   ),
   b(
@@ -455,7 +519,7 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Skille traumatisk skade fra årsaken til fallet",
     "Begrunne gjentatt nevrologisk vurdering og overlevering",
-    ["first-actions", "geriatrics", "syncope"],
+    ["first-actions", "geriatrics", "syncope", "head-injury-current"],
     { minAge: 16, settings: hospital, secondDecision: DECISIONS[3] },
   ),
   b(
@@ -487,7 +551,7 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Knytte acidose til ketoner og insulinmangel",
     "Vurdere hvorfor væske, insulin og kalium følges samlet",
-    ["endocrine", "fluid-balance"],
+    ["endocrine", "fluid-balance", "adult-dka-current"],
     { bloodGasRelevant: true },
   ),
   b(
@@ -503,7 +567,7 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Gjenkjenne ketoacidose ved beskjedent forhøyet glukose",
     "Begrunne legemiddelrevurdering ved mistenkt SGLT2-assosiert ketoacidose",
-    ["sglt2-current", "endocrine", "fluid-balance"],
+    ["sglt2-current", "endocrine", "fluid-balance", "adult-dka-current"],
     { settings: hospital, bloodGasRelevant: true },
   ),
   b(
@@ -513,12 +577,13 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     "osmotisk diurese og uttalt dehydrering",
     "gradvis funksjonsfall, tørste og bevissthetsendring",
     [
-      "Glukose, osmolalitet, Na/K, ketoner og nyrefunksjon",
+      "Glukose, Na/K, nyrefunksjon og ketoner med analysetype (blod-β-hydroksybutyrat eller urinstiks), verdi/grad og tidspunkt",
+      "Tydelig merket målt/total eller beregnet effektiv osmolalitet; oppgi formel hvis beregning etterspørres",
       "Blodgass, væskestatus, varighet og diabetesmedisiner",
     ],
     "Skille hyperosmolar tilstand fra ketoacidose",
     "Begrunne overvåking av nevrologi, væskebalanse og elektrolytter",
-    ["endocrine", "fluid-balance", "geriatrics"],
+    ["endocrine", "fluid-balance", "geriatrics", "adult-hhs-current"],
     { minAge: 40, settings: hospital, bloodGasRelevant: true },
   ),
   b(
@@ -528,13 +593,19 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     "ubalanse mellom næring og glukosesenkende behandling",
     "akutt svetting, uro eller redusert bevissthet",
     [
-      "Glukose og respons på allerede gitt behandling",
+      "Glukose med tidspunkt og respons på allerede gitt behandling; oppgi om glukosetilførsel fortsatt pågår når responsen måles",
       "Preparat/dose, siste inntak, måltider og nyrefunksjon",
       "Nevrologisk undersøkelse",
     ],
     "Skille hypoglykemi fra nevrologisk eller psykiatrisk sykdom",
     "Vurdere residivfare ut fra preparat og matinntak",
-    ["endocrine", "geriatrics"],
+    [
+      "endocrine",
+      "geriatrics",
+      "hypoglycemia-current",
+      "glimepiride-hypoglycemia-current",
+      "sulfonylurea-poisoning-current",
+    ],
   ),
   b(
     "adrenal-crisis",
@@ -549,7 +620,7 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Vurdere binyrebarkkrise ved abdominalt og sirkulatorisk bilde",
     "Begrunne handling ved sterk mistanke mens utredning pågår",
-    ["endocrine", "first-actions"],
+    ["endocrine", "first-actions", "adrenal-crisis-current"],
     { settings: hospital, bloodGasRelevant: true, secondDecision: DECISIONS[0] },
   ),
   b(
@@ -560,12 +631,12 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     "kvalme, ustøhet og kognitiv endring",
     [
       "Tidligere/aktuell Na og symptomtempo",
-      "Serum-/urinosmolalitet, urin-Na og volumstatus",
-      "Medisiner, nyrefunksjon og relevant endokrin utredning",
+      "Volumstatus og glukose; serum-/urinosmolalitet og urin-Na når årsaksskille i oppgaven forutsetter disse",
+      "Medisiner og nyrefunksjon; relevant endokrin utredning når oppgaven krever den. Akutt prioritering kan gjelde før prøvesvar foreligger",
     ],
-    "Skille årsaker med osmolalitet, volumstatus og legemidler",
+    "Vurdere alvorlighet og mulige årsaker med symptomtempo, volumstatus, legemidler og tilgjengelige prøver",
     "Begrunne at tempo og årsak påvirker overvåking og behandling",
-    ["endocrine", "fluid-balance"],
+    ["endocrine", "fluid-balance", "hyponatremia-current"],
   ),
   b(
     "hyperkalemia",
@@ -574,13 +645,13 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     "redusert renal utskillelse og legemiddelbidrag",
     "svakhet eller rytmepåvirkning",
     [
-      "Kalium med hemolyseopplysning/kontrollprøve",
+      "Kalium med hemolyseopplysning og eventuell kontrollprøve; skill tilgjengelige svar fra planlagt kontroll, uten å gjøre ny prøve til et vilkår for akutt prioritering",
       "Nyrefunksjon, diurese og blodgass",
       "Tolket EKG og dosefestet medisinliste",
     ],
     "Skille reell kaliumforstyrrelse fra prøvefeil og finne årsaksbidrag",
     "Prioritere rytmerisiko og medikament-/nyrevurdering",
-    ["fluid-balance", "geriatrics", "first-actions"],
+    ["fluid-balance", "geriatrics", "first-actions", "hyperkalemia-principles"],
     { settings: hospital, bloodGasRelevant: true, secondDecision: DECISIONS[0] },
   ),
   b(
@@ -591,7 +662,7 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     "takvise smerter, oppkast og oppblåst mage",
     [
       "Kirurgihistorie, avføring/luft, hernie- og abdominalfunn",
-      "Full CT-rapport",
+      "Full CT-rapport når bildediagnostikk inngår i vurderingen; innledende haste-/stabiliseringsoppgaver kan gjelde før svaret foreligger",
       "Elektrolytter, nyrefunksjon, blodgass og laktat",
     ],
     "Skille mekanisk fra paralytisk ileus og vurdere iskemi",
@@ -628,7 +699,14 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Knytte synkope eller funksjonsfall til gastrointestinal blødning",
     "Avveie blødning, komorbiditet og legemiddelrisiko",
-    ["geriatrics", "fluid-balance", "first-actions"],
+    [
+      "geriatrics",
+      "fluid-balance",
+      "first-actions",
+      "upper-gi-bleeding-current",
+      "lower-gi-bleeding-current",
+      "bleeding-hemoglobin-interpretation",
+    ],
     { settings: hospital },
   ),
   b(
@@ -660,7 +738,7 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Integrere psykisk lidelse med somatisk alvorlighet",
     "Begrunne trygg vurdering og allianse utover vekt alene",
-    ["eating-disorders", "qt-risk", "liaison-psychiatry"],
+    ["eating-disorders", "qt-risk", "hydroxyzine-contraindications", "liaison-psychiatry"],
     { minAge: 15, maxAge: 70, bloodGasRelevant: true },
   ),
   b(
@@ -676,7 +754,15 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Unngå å forklare nye somatiske tegn med tidligere psykiatrisk diagnose",
     "Kombinere trygg kommunikasjon og årsaksrettet vurdering",
-    ["liaison-psychiatry", "geriatrics", "communication"],
+    [
+      "liaison-psychiatry",
+      "geriatrics",
+      "delirium-current",
+      "communication",
+      "decision-capacity",
+      "somatic-care-scope",
+      "somatic-care-resistance",
+    ],
     { secondDecision: DECISIONS[5] },
   ),
   b(
@@ -692,7 +778,14 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Skille ventilasjonssvikt fra beroligende metning under oksygen",
     "Begrunne ventilasjon, antidotvurdering og observasjon etter respons",
-    ["opioid-current", "substance", "respiration"],
+    [
+      "opioid-current",
+      "methadone-poisoning-current",
+      "buprenorphine-poisoning-current",
+      "oxycodone-poisoning-current",
+      "substance",
+      "respiration",
+    ],
     { bloodGasRelevant: true },
   ),
   b(
@@ -724,7 +817,7 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Skille alkoholisk ketoacidose fra diabetes, laktacidose og toksisk alkohol",
     "Integrere ernæring, elektrolytter og samtidig somatikk",
-    ["alcoholic-ketoacidosis", "substance"],
+    ["alcoholic-ketoacidosis", "adult-aka-current", "toxic-alcohol-differential", "substance"],
     { settings: hospital, bloodGasRelevant: true },
   ),
   b(
@@ -740,8 +833,8 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Vurdere smerte og toleranse uten å anta rusmotivasjon",
     "Begrunne samordnet lindring og bivirkningsobservasjon",
-    ["substance", "pain", "assignment-1"],
-    { settings: gasSettings },
+    ["substance", "pain", "assignment-1", "lar-acute-pain-current"],
+    { settings: gasSettings, firstDecision: DECISIONS[2] },
   ),
   b(
     "palliative-decline",
@@ -751,13 +844,29 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     "akutt forverring ved alvorlig sykdom",
     [
       "Grunnsykdom, funksjon, behandlingsavklaringer og pasientønske",
-      "Komplette funn/prøver som avklarer forverringen",
+      "Funn og tilgjengelige prøver som gjør den valgte beslutningen besvarbar; skill mellom vurdering før videre utredning og vurdering etter at resultater foreligger",
       "Pårørendeopplysninger og omsorg",
     ],
     "Skille reversibel sykdom fra antatt terminal progresjon",
     "Avveie nytte, belastning og pasientens mål",
-    ["treatment-goals", "geriatrics", "decision-capacity"],
-    { minAge: 40, maxAge: 95, secondDecision: DECISIONS[5] },
+    [
+      "treatment-goals",
+      "geriatrics",
+      "decision-capacity",
+      "acute-kidney-current",
+      "hypoglycemia-current",
+      "hypercalcemia-current",
+      "sepsis-current",
+    ],
+    {
+      minAge: 40,
+      maxAge: 95,
+      secondDecision: DECISIONS[5],
+      holisticFocus: [
+        "Velg en akutt utløsende tilstand som de oppgitte fagkildene faktisk støtter, og bruk bare relevante funn og tiltak",
+        "Avvei utredning og behandling mot nytte, belastning og pasientens mål; palliasjon betyr ikke automatisk terminalfase eller at reversibel sykdom skal overses",
+      ],
+    },
   ),
   b(
     "palliative-pain",
@@ -788,7 +897,14 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Identifisere behov uten å sykeliggjøre normale sorgreaksjoner",
     "Planlegge tydelig informasjon og konkret videre kontakt",
-    ["bereavement", "assignment-1", "communication"],
+    [
+      "bereavement",
+      "bereaved-children-current",
+      "bereavement-support-current",
+      "assignment-1",
+      "communication",
+      "first-actions",
+    ],
     {
       settings: ["hjem", "mottak", "sengepost"],
       formats: ["long"],
@@ -797,8 +913,11 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
         "Tidfest premortale målinger; ikke konstruer nye pasientvitalia i samtalen etter bekreftet død",
         "Familiens informasjon, barns behov og konkret videre oppfølging",
       ],
+      firstDecision: DECISIONS[5],
       secondDecision: DECISIONS[5],
-      trajectories: [TRAJECTORIES[2]],
+      trajectories: [
+        "tidsfestet akuttforløp frem til bekreftet uventet dødsfall, deretter ivaretakelse og oppfølging av etterlatte",
+      ],
     },
   ),
   b(
@@ -814,7 +933,14 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Vurdere skade og sikkerhet uten stereotypier",
     "Drøfte pasientønske, beslutningskompetanse og oppfølging",
-    ["violence", "communication", "decision-capacity", "assignment-1"],
+    [
+      "violence",
+      "communication",
+      "decision-capacity",
+      "emergency-disclosure",
+      "violence-aversion-duty",
+      "assignment-1",
+    ],
     { settings: ambulatory, secondDecision: DECISIONS[5] },
   ),
   b(
@@ -830,8 +956,16 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Skille språkbarriere fra manglende beslutningsforståelse",
     "Utforme forståelig informasjon og presis overlevering",
-    ["communication", "decision-capacity", "assignment-1"],
-    { settings: [...faceToFace, "telefon"], secondDecision: DECISIONS[5] },
+    ["communication", "interpreter-current", "decision-capacity", "assignment-1", "first-actions"],
+    {
+      settings: [...faceToFace, "telefon"],
+      firstDecision: DECISIONS[5],
+      secondDecision: DECISIONS[5],
+      holisticFocus: [
+        "Gi en tydelig klinisk situasjon som gjør kommunikasjonsbeslutningen besvarbar; ikke legg til et skjult krav om diagnosespesifikk behandling uten kildegrunnlag",
+        "Undersøk forståelsen gjennom tilpasset samtale og relevant språklig bistand; språkbarriere eller uenighet er ikke i seg selv manglende beslutningskompetanse",
+      ],
+    },
   ),
   b(
     "cord-compression",
@@ -856,13 +990,13 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     "malignitetsrelatert kalsiumstigning og dehydrering",
     "tørste, obstipasjon og økende sløvhet",
     [
-      "Ionisert kalsium eller total-kalsium med albumin",
+      "Fritt/ionisert kalsium med referanse, eller tydelig merket total-kalsium med albumin og tolkningens begrensninger. Eventuell numerisk korreksjon krever oppgitt konvensjon; den er ikke automatisk en bedre analyse",
       "Na/K, nyrefunksjon, væskestatus og medisinliste",
       "Tempo, nevrologi og behandlingsmål",
     ],
     "Skille metabolsk komplikasjon fra antatt progresjon eller sedasjon",
     "Planlegge oppfølging av kalsium, nyrefunksjon og symptomer",
-    ["hypercalcemia-current", "cancer-pain", "fluid-balance"],
+    ["hypercalcemia-current", "calcium-interpretation-current", "cancer-pain", "fluid-balance"],
     { minAge: 30, settings: hospital },
   ),
   b(
@@ -906,11 +1040,11 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     [
       "Svelg/uvula, stemme og gapeevne",
       "Luftvei, hydrering, feber og allmenntilstand",
-      "Full ØNH-vurdering og eventuelle bildesvar",
+      "Full ØNH-rapport og eventuelle bildesvar når de foreligger; hastegrad og behov for videre vurdering kan begrunnes før disse",
     ],
     "Skille abscess fra ukomplisert tonsillitt og andre svelgtilstander",
     "Prioritere luftvei, væske og ØNH-vurdering",
-    ["ent", "first-actions"],
+    ["ent", "first-actions", "peritonsillar-adult-current", "peritonsillar-child-current"],
     { minAge: 10, maxAge: 80, settings: gasSettings, secondDecision: DECISIONS[0] },
   ),
   b(
@@ -921,12 +1055,12 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     "vedvarende halssmerter, tretthet og lymfeknuter",
     [
       "Svelg/luftvei, lymfeknuter og abdomen",
-      "Blodstatus, leverprøver og EBV-test med tidskontekst",
+      "Tilgjengelig blodstatus, leverprøver og EBV-test når oppgaven bruker disse; angi heterofil hurtigtest eller EBV-spesifikk serologi, resultat, prøvetid og sykdomsvarighet",
       "Tidligere behandling og utslett",
     ],
     "Integrere systemiske funn fremfor å anta bakteriell tonsillitt",
     "Vurdere komplikasjoner, funksjon og oppfølging",
-    ["ent", "ent-current"],
+    ["ent", "ent-current", "mononucleosis-current", "mononucleosis-complications"],
     { minAge: 10, maxAge: 40, settings: ambulatory, secondDecision: DECISIONS[4] },
   ),
   b(
@@ -942,7 +1076,7 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Skille legemiddeleffekt fra andre postoperative komplikasjoner",
     "Avveie smertelindring og ventilasjon ved revurdering",
-    ["surgical-stress", "opioid-current", "respiration"],
+    ["surgical-stress", "opioid-current", "respiration", "postoperative-analgesia-current"],
     { settings: hospital, bloodGasRelevant: true, secondDecision: DECISIONS[3] },
   ),
   b(
@@ -958,7 +1092,13 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Skille infeksjon, atelektase og andre årsaker til postoperativ tungpust",
     "Knytte lindring, mobilisering og ernæring til respirasjonen",
-    ["surgical-stress", "respiration", "sepsis-current"],
+    [
+      "surgical-stress",
+      "respiration",
+      "sepsis-current",
+      "pulmonary-embolism",
+      "postoperative-analgesia-current",
+    ],
     { settings: hospital, bloodGasRelevant: true },
   ),
   b(
@@ -968,7 +1108,7 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     "redusert tarmmotilitet etter kirurgi og opioider",
     "kvalme, oppblåsthet og dårlig matinntak etter operasjon",
     [
-      "Inngrep, avføring/luft, abdomen og full CT-rapport",
+      "Inngrep, avføring/luft og abdomen; full CT-rapport hvis undersøkelsen er gjort eller oppgaven krever radiologisk avklaring",
       "Opioider, øvrige medisiner og væskeregnskap",
       "Elektrolytter, nyrefunksjon og infeksjons-/iskemifunn",
     ],

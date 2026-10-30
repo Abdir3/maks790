@@ -28,6 +28,11 @@ export function validateGenerated(
   allowedSources: readonly string[],
 ): string[] {
   const issues: string[] = [];
+  const multiChildTriage = draw.blueprintId === "child-triage";
+  if (multiChildTriage && stageCount < 2)
+    issues.push("Prioritering av flere barn trenger en langcase med ny vurdering.");
+  if (g.diagnosisFamily !== draw.diagnosisFamily)
+    issues.push("Diagnosefamilien avviker fra den valgte rammen.");
   if (!/[.!?][»”")]?\s*$/.test(g.role))
     issues.push("Rollebeskrivelsen slutter med en ufullført setning.");
   if (g.ageYears < draw.minAge || g.ageYears > draw.maxAge)
@@ -41,11 +46,23 @@ export function validateGenerated(
   if (new Set(questionTexts).size !== questionTexts.length) issues.push("Gjentatte oppgaver.");
   if (stageCount === 1 && (g.stages[0]?.questions.length ?? 0) < 2)
     issues.push("Kortcasen trenger minst to spørsmål om tolkning og klinisk konsekvens.");
+  if (stageCount === 1 && (g.stages[0]?.questions.length ?? 0) > 3)
+    issues.push("Kortcasen har for mange spørsmål for en avgrenset øvingsøkt.");
   if (draw.bloodGasRelevant && !g.stages.some((s) => s.bloodGas.length))
     issues.push("Den valgte rammen trenger en komplett blodgass.");
   const skills = new Set(g.stages.flatMap((s) => s.questions.map((q) => q.skill)));
   if (stageCount > 1 && skills.size < 3) issues.push("For liten variasjon i resonneringsoppgaver.");
   g.stages.forEach((stage, index) => {
+    if (
+      multiChildTriage &&
+      index === 0 &&
+      (stage.vitals.length ||
+        stage.medications.length ||
+        stage.laboratory.length ||
+        stage.bloodGas.length ||
+        stage.reports.length)
+    )
+      issues.push("Første triagedel presenterer alle barna likt uten en enkeltpasients tabeller.");
     if (
       !Number.isInteger(stage.elapsedMinutes) ||
       (index > 0 && stage.elapsedMinutes < g.stages[index - 1]!.elapsedMinutes)
@@ -56,6 +73,7 @@ export function validateGenerated(
     const ids = new Set(stage.vitals.map((v) => v.id));
     if (
       index === 0 &&
+      !multiChildTriage &&
       (["bp", "pulse", "respiration", "spo2", "temperature"].some(
         (id) => !ids.has(id as GeneratedCase["stages"][number]["vitals"][number]["id"]),
       ) ||
@@ -106,6 +124,29 @@ export function validateGenerated(
           (v.id === "gcs" && !Number.isInteger(value))
         )
           issues.push(`Ugyldig ${v.id}/enhet.`);
+        if (v.id === "gcs") {
+          // Check arithmetic only when the note gives one unambiguous set of
+          // numerical components. Clinical descriptions and untestable verbal
+          // responses still require the independent clinical review.
+          const components = ["E", "V", "M"].map((label) => [
+            ...v.note.matchAll(
+              new RegExp(
+                `(?<![\\p{L}])${label}\\s*[:=]?\\s*(\\d+(?:[.,]\\d+)?)(?=\\s|[EVM,;)/.]|$)`,
+                "giu",
+              ),
+            ),
+          ]);
+          if (components.every((matches) => matches.length === 1)) {
+            const scores = components.map((matches) => Number(matches[0]![1]!.replace(",", ".")));
+            if (
+              scores.some(
+                (score, i) => !Number.isInteger(score) || score < 1 || score > [4, 5, 6][i]!,
+              ) ||
+              scores.reduce((sum, score) => sum + score, 0) !== value
+            )
+              issues.push("GCS-totalen og de oppgitte E/V/M-delskårene stemmer ikke.");
+          }
+        }
       }
       if (v.id === "spo2" && !/romluft|oksygen|O₂|O2/i.test(v.note))
         issues.push("SpO₂ mangler oksygenkontekst.");
@@ -155,6 +196,16 @@ export function validateFeedback(
     if (answer && !item.evidence) issues.push("Besvart oppgave mangler konkret tekstbelegg.");
     if (!answer && (item.status !== "unanswered" || item.evidence || item.strengths.length))
       issues.push("Ubesvart oppgave gis vurdering som besvart.");
+    if (
+      !answer &&
+      (item.improvements.length ||
+        item.alternatives.length ||
+        item.safety.length ||
+        item.sourceIds.length)
+    )
+      issues.push(
+        "Ubesvart oppgave skal ikke få faglig løsningsveiledning før studenten har forsøkt.",
+      );
     if (answer && item.status === "unanswered") issues.push("Besvart oppgave regnes som ubesvart.");
     if (item.sourceIds.some((id) => !allowedSources.includes(id)))
       issues.push("Tilbakemeldingen viser til ukjent kilde.");

@@ -5,7 +5,7 @@ import { blindSolutionContract, draftContract, reviewContract } from "./case-con
 import type { Assessment } from "./case-generation.server";
 import type { CaseDefinition } from "./case-model";
 import { publicDefinition } from "./generated-case";
-import { SOURCE_VERSION } from "./case-sources.server";
+import { COMPATIBLE_SOURCE_VERSIONS } from "./case-sources.server";
 import type { HistoryEntry, VarietyDraw } from "./case-variety";
 
 type DataClient = Pick<SupabaseClient<Database>, "from" | "rpc">;
@@ -26,9 +26,24 @@ const assessmentSchema = z.object({
   generated: draftContract.validator,
   review: reviewContract.validator,
   blindSolution: blindSolutionContract.validator.optional(),
-  sourceVersion: z.literal(SOURCE_VERSION),
+  sourceVersion: z.enum(COMPATIBLE_SOURCE_VERSIONS),
   sourceIds: z.array(z.string()).min(1),
   createdAt: z.string().datetime(),
+  modelResponses: z
+    .array(
+      z.object({
+        purpose: z.string(),
+        response: z.object({
+          id: z.string().optional(),
+          model: z.string().optional(),
+          inputTokens: z.number().int().nonnegative().optional(),
+          outputTokens: z.number().int().nonnegative().optional(),
+          reasoningTokens: z.number().int().nonnegative().optional(),
+        }),
+      }),
+    )
+    .max(6)
+    .optional(),
 });
 
 const semanticSchema = z.object({
@@ -135,8 +150,15 @@ export async function loadOwnedAssessment(
     throw new Error(
       "Vurderingsgrunnlaget bruker et eldre eller ugyldig kildegrunnlag. Casen og besvarelsen din er beholdt; lag en ny case for oppdatert vurdering.",
     );
-  const { blindSolution, ...basis } = assessment.data;
-  return { definition, assessment: { ...basis, ...(blindSolution ? { blindSolution } : {}) } };
+  const { blindSolution, modelResponses, ...basis } = assessment.data;
+  return {
+    definition,
+    assessment: {
+      ...basis,
+      ...(blindSolution ? { blindSolution } : {}),
+      ...(modelResponses ? { modelResponses } : {}),
+    },
+  };
 }
 
 export async function loadCaseHistory(

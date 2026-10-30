@@ -18,7 +18,12 @@ import {
 } from "../src/lib/generated-case";
 import { openAssessment, sealAssessment } from "../src/lib/case-assessment.server";
 import { withCaseOperation } from "../src/lib/case-operation.server";
-import { readResponseJson } from "../src/lib/ai-gateway.server";
+import {
+  readResponseJson,
+  AiProviderError,
+  providerErrorFromResponse,
+  generateJson,
+} from "../src/lib/ai-gateway.server";
 import { allQuestions, parseDraft } from "../src/lib/case-model";
 import {
   draw,
@@ -83,6 +88,12 @@ describe("Fail-closed content checks", () => {
     );
   });
   for (const [name, mutate] of [
+    [
+      "diagnosis family drift",
+      (g: ReturnType<typeof generatedFixture>) => {
+        g.diagnosisFamily = "akutt-koronarsyndrom";
+      },
+    ],
     [
       "age",
       (g: ReturnType<typeof generatedFixture>) => {
@@ -175,6 +186,45 @@ describe("Fail-closed content checks", () => {
     assert.equal(reviewPassed({ ...reviewed, clinicallyPlausible: false }), false);
     assert.equal(reviewPassed({ ...reviewed, issues: ["Uavklart"] }), false);
   });
+  it("checks explicit GCS components without inventing a score from prose", () => {
+    const g = generatedFixture();
+    const gcs = g.stages[0]!.vitals.find((v) => v.id === "gcs")!;
+    for (const note of ["E4 V5 M6", "E4V5M6", "E: 4, V: 5, M: 6"]) {
+      gcs.note = note;
+      assert.deepEqual(validateGenerated(g, draw, 3, draw.sourceIds), []);
+    }
+    gcs.value = "14";
+    assert.match(validateGenerated(g, draw, 3, draw.sourceIds).join(" "), /GCS-totalen/);
+    gcs.note = "E4 V4 M6; våken, desorientert";
+    assert.deepEqual(validateGenerated(g, draw, 3, draw.sourceIds), []);
+    gcs.note = "E5 V3 M6"; // The sum alone would incorrectly pass.
+    assert.match(validateGenerated(g, draw, 3, draw.sourceIds).join(" "), /E\/V\/M/);
+    gcs.note = "E3.5 V4.5 M6";
+    assert.match(validateGenerated(g, draw, 3, draw.sourceIds).join(" "), /E\/V\/M/);
+    gcs.note = "Søvnig, åpner øynene ved tiltale og svarer orientert.";
+    assert.deepEqual(validateGenerated(g, draw, 3, draw.sourceIds), []);
+    gcs.note = "Merking: prøve4, rev5, rom6. Ingen numeriske GCS-delskårer oppgitt.";
+    assert.deepEqual(validateGenerated(g, draw, 3, draw.sourceIds), []);
+  });
+  it("allows focused two- or three-question short cases but rejects four independent tasks", () => {
+    const g = generatedFixture(1);
+    const original = g.stages[0]!.questions[0]!;
+    g.stages[0]!.questions = [
+      original,
+      { ...original, prompt: "Hvilken klinisk beslutning er viktigst nå, og hvorfor?" },
+    ];
+    assert.deepEqual(validateGenerated(g, draw, 1, draw.sourceIds), []);
+    g.stages[0]!.questions.push({
+      ...original,
+      prompt: "Hvordan påvirker de oppgitte legemidlene vurderingen?",
+    });
+    assert.deepEqual(validateGenerated(g, draw, 1, draw.sourceIds), []);
+    g.stages[0]!.questions.push({
+      ...original,
+      prompt: "Hvordan vil du planlegge pasientens videre oppfølging?",
+    });
+    assert.match(validateGenerated(g, draw, 1, draw.sourceIds).join(" "), /for mange spørsmål/);
+  });
 });
 function blindFixture(id: string) {
   return {
@@ -191,6 +241,65 @@ function blindFixture(id: string) {
   };
 }
 describe("Generation orchestration", () => {
+  it("does not nominate a priority child through the first triage layout", () => {
+    const triageDraw = drawVariety(
+      [],
+      {
+        startSetting: "legevakt",
+        difficulty: "advanced",
+        blueprintId: "child-triage",
+        format: "long",
+      },
+      () => 0,
+    );
+    // A structural regression fixture, not a model-generated clinical example.
+    const g = generatedFixture(3);
+    g.patient = "Amir";
+    g.ageYears = 4;
+    g.diagnosisFamily = triageDraw.diagnosisFamily;
+    g.background = ["Tre barn venter sammen med sine foreldre på legevakten."];
+    g.stages[0]!.paragraphs = [
+      "Amir, fire år, sitter hos mor og svarer på spørsmål. Han hoster og har drukket mindre.",
+      "Liv, åtte uker, virker slapp i fars armer. Far beskriver tydelig mindre drikking.",
+      "Eli, tolv år, kom etter å ha tråkket over. Hun snakker rolig med mor.",
+    ];
+    g.stages[0]!.clinicalFindings = [
+      "Førsteinntrykket er observert av sykepleier. Vitale parametre er ennå ikke målt.",
+    ];
+    g.stages.forEach((stage, i) => {
+      stage.setting = i ? "Legevakt – Amir" : triageDraw.setting;
+      if (i) {
+        stage.paragraphs = ["Amir undersøkes mens en annen sykepleier følger Liv og Eli."];
+        stage.clinicalFindings = ["Amir er våken og svarer med hele setninger."];
+        stage.vitals = [
+          { id: "bp", value: "96/60", unit: "mmHg", note: "" },
+          { id: "pulse", value: "112", unit: "/min", note: "Regelmessig" },
+          { id: "respiration", value: "28", unit: "/min", note: "" },
+          { id: "spo2", value: "97", unit: "%", note: "Romluft" },
+          { id: "temperature", value: "38,1", unit: "°C", note: "" },
+          { id: "consciousness", value: "Våken, god kontakt", unit: "", note: "" },
+        ];
+      }
+      stage.questions[0]!.rubric.sourceIds = ["pediatrics", "assignment-1"];
+    });
+    g.stages[0]!.vitals = [];
+    assert.deepEqual(validateGenerated(g, triageDraw, 3, triageDraw.sourceIds), []);
+    const definition = buildDefinition("triage-layout", g, triageDraw);
+    assert.equal(definition.patient, undefined);
+    assert.equal(definition.parts[0]!.measurements!.values.length, 0);
+    assert.ok(definition.parts[1]!.measurements!.values.length);
+    assert.equal(publicDefinition(definition).patient, undefined);
+
+    g.stages[0]!.vitals = [...g.stages[1]!.vitals];
+    assert.match(
+      validateGenerated(g, triageDraw, 3, triageDraw.sourceIds).join(" "),
+      /presenterer alle barna likt/,
+    );
+    assert.match(
+      validateGenerated(g, triageDraw, 1, triageDraw.sourceIds).join(" "),
+      /trenger en langcase/,
+    );
+  });
   it("derives blood gas from displayed primary values and strips nested private fields", () => {
     const g = generatedFixture();
     g.stages[0]!.bloodGas = [
@@ -208,9 +317,12 @@ describe("Generation orchestration", () => {
     assert.equal(normalised.stages[0]!.bloodGas[0]!.pH, 7.4);
     const d = buildDefinition("gas", normalised, draw);
     const group = d.parts[0].investigations![0]!;
-    assert.equal(group.values.find((v) => v.id === "pco2")!.value, "5.27");
+    assert.equal(group.values.find((v) => v.id === "pco2")!.value, "5,27");
     const bicarbonate = 0.23 * 5.27 * 10 ** (7.4 - 6.095);
-    assert.equal(group.values.find((v) => v.id === "hco3")!.value, bicarbonate.toFixed(1));
+    assert.equal(
+      group.values.find((v) => v.id === "hco3")!.value,
+      bicarbonate.toFixed(1).replace(".", ","),
+    );
     assert.ok(group.sourceUrl?.startsWith("https://labfag.no/"));
     const injected = JSON.parse(JSON.stringify(d));
     injected.parts[0].investigations[0].dossier = "hidden-investigation";
@@ -307,6 +419,19 @@ describe("Generation orchestration", () => {
     g.patient = "Mia";
     g.ageYears = 0.5;
     assert.equal(buildDefinition("age", g, draw).patient, "Mia, 6 måneder");
+    g.ageYears = 0.99;
+    assert.equal(buildDefinition("age", g, draw).patient, "Mia, 11 måneder");
+    g.ageYears = 1;
+    assert.equal(buildDefinition("age", g, draw).patient, "Mia, 1 år");
+    g.ageYears = 12 / 365;
+    assert.equal(buildDefinition("age", g, draw).patient, "Mia, 12 dager");
+    g.ageYears = 4 / (365 * 24);
+    g.patient = "Mia, 4 timer";
+    assert.equal(buildDefinition("age", g, draw).patient, "Mia, 4 timer");
+    g.ageYears = 1 / 365;
+    assert.equal(buildDefinition("age", g, draw).patient, "Mia, 1 dag");
+    g.ageYears = 1 / 12;
+    assert.equal(buildDefinition("age", g, draw).patient, "Mia, 1 måned");
   });
   it("reviews a complete timeline then returns only student content", async () => {
     const calls: string[] = [];
@@ -317,6 +442,7 @@ describe("Generation orchestration", () => {
       recent: [],
       generate: async (args) => {
         calls.push(args.schemaName);
+        args.onResponse?.({ model: "gpt-6-astra", id: `response-${calls.length}` });
         if (args.schemaName === "case_draft_v3") return generatedFixture();
         if (args.schemaName === "case_blind_v3") {
           assert.ok(!args.input.includes('"rubric"'));
@@ -328,6 +454,10 @@ describe("Generation orchestration", () => {
     });
     assert.deepEqual(calls, ["case_draft_v3", "case_blind_v3", "case_review_v3"]);
     assert.equal(result.attempts, 1);
+    assert.equal(result.assessment.modelResponses?.length, 3);
+    assert.ok(
+      result.assessment.modelResponses?.every((item) => item.response.model === "gpt-6-astra"),
+    );
     assert.equal(allQuestions(result.definition).length, 3);
     const publicText = JSON.stringify(result.definition);
     assert.ok(!publicText.includes("dossier"));
@@ -337,6 +467,30 @@ describe("Generation orchestration", () => {
       publicDefinition({ ...result.definition, _assessment: "private" }),
       result.definition,
     );
+  });
+  it("permits a justified empty alternative while still running the independent review", async () => {
+    const g = generatedFixture();
+    g.stages[0]!.questions[0]!.rubric.alternatives = [];
+    let reviewCalls = 0;
+    const result = await generateValidatedCase({
+      id: "no-forced-alternative",
+      draw,
+      stages: 3,
+      recent: [],
+      generate: async (request) => {
+        if (request.schemaName === "case_draft_v3") return g;
+        if (request.schemaName === "case_blind_v3") {
+          const solution = blindFixture("no-forced-alternative");
+          solution.questions[0]!.alternative = "";
+          return solution;
+        }
+        reviewCalls++;
+        return reviewed;
+      },
+    });
+    assert.equal(reviewCalls, 1);
+    assert.deepEqual(result.assessment.generated.stages[0]!.questions[0]!.rubric.alternatives, []);
+    assert.equal(result.assessment.blindSolution.questions[0]!.alternative, "");
   });
   it("retries invalid content once, then blocks without returning a case", async () => {
     let calls = 0;
@@ -446,11 +600,12 @@ describe("Feedback evidence, alternatives and question-specific temporal scope",
     );
     assert.deepEqual(validateFeedback(feedbackFixture(id, ""), def, {}, draw.sourceIds), []);
     assert.ok(validateFeedback(feedbackFixture(id, answer), def, {}, draw.sourceIds).length);
-    assert.ok(
-      !feedbackContract.validator.safeParse({
-        ...feedbackFixture(id),
-        questions: [{ ...feedbackFixture(id).questions[0], alternatives: [] }],
-      }).success,
+    const noAlternativeNeeded = feedbackFixture(id, answer);
+    noAlternativeNeeded.questions[0]!.alternatives = [];
+    assert.ok(feedbackContract.validator.safeParse(noAlternativeNeeded).success);
+    assert.deepEqual(
+      validateFeedback(noAlternativeNeeded, def, { [id]: answer }, draw.sourceIds),
+      [],
     );
   });
   it("assesses the whole submission with time-bounded information for each question", async () => {
@@ -505,10 +660,10 @@ describe("Feedback evidence, alternatives and question-specific temporal scope",
           sourceIds: draw.sourceIds,
           createdAt: "2026-10-27",
         },
-        {},
+        { [id]: "Jeg vil vurdere pasientens funksjon." },
         async (args) =>
           args.schemaName === "case_feedback_v3"
-            ? feedbackFixture(id, "")
+            ? feedbackFixture(id, "Jeg vil vurdere pasientens funksjon.")
             : { ...reviewed, noUnsupportedHighRiskAdvice: false },
       ),
       /usikkerheter/,
@@ -580,6 +735,38 @@ describe("Assessment integrity and operation isolation", () => {
   });
 });
 describe("Responses stream completion", () => {
+  it("normalises transport failures without exposing connection details", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env["LOVABLE_API_KEY"];
+    process.env["LOVABLE_API_KEY"] = "local-test-placeholder";
+    try {
+      for (const [failure, expected] of [
+        [new Error("private upstream connection detail"), "unavailable"],
+        [new TypeError("private fetch detail"), "unavailable"],
+        [{ message: "private non-Error failure" }, "unavailable"],
+        [new DOMException("private timeout detail", "TimeoutError"), "timeout"],
+        [new DOMException("private abort detail", "AbortError"), "timeout"],
+        [new AiProviderError("credits-exhausted"), "credits-exhausted"],
+      ] as const) {
+        globalThis.fetch = (async () => {
+          throw failure;
+        }) as typeof fetch;
+        await assert.rejects(
+          generateJson({ instructions: "test", input: "test", schemaName: "test", schema: {} }),
+          (error: unknown) => {
+            assert.ok(error instanceof AiProviderError);
+            assert.equal(error.code, expected);
+            assert.ok(!error.message.includes("private"));
+            return true;
+          },
+        );
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env["LOVABLE_API_KEY"];
+      else process.env["LOVABLE_API_KEY"] = originalKey;
+    }
+  });
   const stream = (s: string) =>
     new ReadableStream<Uint8Array>({
       start(c) {
@@ -592,11 +779,119 @@ describe("Responses stream completion", () => {
     const body = `data: ${JSON.stringify({ type: "response.output_text.delta", delta: '{"text":"øving"}' })}\n\ndata: ${JSON.stringify({ type: "response.completed", response: { status: "completed" } })}`;
     assert.deepEqual(await readResponseJson(stream(body)), { text: "øving" });
   });
+  it("records provider model and usage without copying private response fields", async () => {
+    const response = {
+      status: "completed",
+      id: "resp-test",
+      model: "gpt-6-astra",
+      output_text: '{"ok":true}',
+      instructions: "private instructions",
+      metadata: { secret: "no" },
+      usage: {
+        input_tokens: 200,
+        output_tokens: 50,
+        output_tokens_details: { reasoning_tokens: 20 },
+      },
+    };
+    const observed: unknown[] = [];
+    const result = await readResponseJson(
+      stream(`data: ${JSON.stringify({ type: "response.completed", response })}\n`),
+      (metadata) => observed.push(metadata),
+    );
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(observed, [
+      {
+        id: "resp-test",
+        model: "gpt-6-astra",
+        inputTokens: 200,
+        outputTokens: 50,
+        reasoningTokens: 20,
+      },
+    ]);
+  });
   it("rejects truncated, failed and incomplete streams", async () => {
     await assert.rejects(
       readResponseJson(stream('data: {"type":"response.output_text.delta","delta":"{}"}\n')),
     );
     for (const type of ["response.failed", "response.incomplete", "error"])
       await assert.rejects(readResponseJson(stream(`data: ${JSON.stringify({ type })}\n`)));
+  });
+  it("recognises exhausted credit inside HTTP-success streams without exposing provider text", async () => {
+    for (const [event, code] of [
+      [
+        { type: "error", code: "credit_balance_exhausted", message: "private provider detail" },
+        "credits-exhausted",
+      ],
+      [
+        {
+          type: "response.failed",
+          response: { error: { code: "insufficient_quota", message: "private provider detail" } },
+        },
+        "usage-limited",
+      ],
+    ] as const) {
+      await assert.rejects(
+        readResponseJson(stream(`data: ${JSON.stringify(event)}\n`)),
+        (error: unknown) => {
+          assert.ok(error instanceof AiProviderError);
+          assert.equal(error.code, code);
+          assert.ok(!error.message.includes("private"));
+          return true;
+        },
+      );
+    }
+  });
+  it("does not expose generated text from malformed JSON", async () => {
+    const event = {
+      type: "response.completed",
+      response: { status: "completed", output_text: '{"private_diagnosis":"secret answer" BROKEN' },
+    };
+    await assert.rejects(
+      readResponseJson(stream(`data: ${JSON.stringify(event)}\n`)),
+      (error: unknown) => {
+        assert.ok(error instanceof AiProviderError);
+        assert.equal(error.code, "unavailable");
+        assert.ok(
+          !error.message.includes("secret") && !error.message.includes("private_diagnosis"),
+        );
+        return true;
+      },
+    );
+  });
+  it("distinguishes billing from retryable HTTP 429 and bounds untrusted error bodies", async () => {
+    for (const [providerCode, expected] of [
+      ["credit_balance_exhausted", "credits-exhausted"],
+      ["project_spend_limit_exceeded", "usage-limited"],
+      ["organization_spend_limit_exceeded", "usage-limited"],
+      ["organization_usage_limit_exceeded", "usage-limited"],
+      ["insufficient_quota", "usage-limited"],
+      ["rate_limit_exceeded", "rate-limited"],
+      ["slow_down", "rate-limited"],
+    ] as const) {
+      const error = await providerErrorFromResponse(
+        new Response(
+          JSON.stringify({ error: { code: providerCode, message: "private provider detail" } }),
+          { status: 429 },
+        ),
+      );
+      assert.equal(error.code, expected);
+      assert.ok(!error.message.includes("private"));
+    }
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("private".repeat(3000)));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const oversized = await providerErrorFromResponse(new Response(body, { status: 503 }));
+    assert.equal(oversized.code, "unavailable");
+    assert.equal(cancelled, true);
+    assert.equal(
+      (await providerErrorFromResponse(new Response("private html", { status: 401 }))).code,
+      "authentication",
+    );
   });
 });

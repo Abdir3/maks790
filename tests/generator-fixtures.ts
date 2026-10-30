@@ -10,6 +10,7 @@ const selected = drawVariety(
 // a clinical calibration of whichever blueprint happens to sort first.
 export const draw = {
   ...selected,
+  diagnosisFamily: "akutt funksjonssvikt",
   bloodGasRelevant: false,
   sourceIds: ["study-guide", "assignment-2", "geriatrics"],
 };
@@ -123,13 +124,13 @@ export function feedbackFixture(
         status: answer ? "partial" : "unanswered",
         evidence: answer,
         strengths: answer ? ["Du vil avklare endring fra tidligere funksjon."] : [],
-        improvements: ["Beskriv hvilke observasjoner som bør føre til eskalering."],
-        alternatives: [
-          "Observasjon kan være forsvarlig med tydelig ansvar og mulighet for rask eskalering.",
-        ],
+        improvements: answer ? ["Beskriv hvilke observasjoner som bør føre til eskalering."] : [],
+        alternatives: answer
+          ? ["Observasjon kan være forsvarlig med tydelig ansvar og mulighet for rask eskalering."]
+          : [],
         safety: [],
         nextStep: "Skriv en kort begrunnelse for hvem du vil kontakte og hvorfor.",
-        sourceIds: ["assignment-2", "geriatrics"],
+        sourceIds: answer ? ["assignment-2", "geriatrics"] : [],
       },
     ],
   };
