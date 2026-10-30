@@ -32,6 +32,11 @@ Den er ikke publisert. Endringene krever ingen ny SQL-migrering.
   tolkningsoppgave ikke får en skjult tiltaksplan som sensorkrav. Faktisk
   uforsvarlige påstander korrigeres fortsatt. Metodeforbehold vurderes mot
   oppgavens krav om en konkret konklusjon, uten krav om unødig gjentakelse.
+- Instruksen til den uavhengige løseren presiserer at resonneringskravet
+  gjelder oppgaven, ikke kvaliteten på modellens eget svar. Manglende
+  EKG/blodgass skal bare påpekes når oppgaven trenger undersøkelsen, og
+  fravær av avgjørende datamangler skrives som tom liste. Avvisningssperrene
+  er beholdt; virkningen på faktiske modellavvisninger er ikke målt.
 - Oppgitte GCS-delskårer kontrolleres aritmetisk når én entydig E-, V- og
   M-verdi finnes. Tekstlig våkenhet omgjøres ikke automatisk til en skår.
   Medikamentpresentasjonen unngår dobbel tegnsetting; blodgassverdier
