@@ -1,5 +1,4 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +19,7 @@ import {
 } from "@/lib/case-variety";
 import type { CaseDefinition } from "@/lib/case-model";
 export type GeneratorFormat = "long" | "quick";
-const GENERATION_WAIT_MS = 5 * 60_000;
+const GENERATION_WAIT_MS = 21 * 60_000;
 export function CaseGenerator({
   format,
   onClose,
@@ -32,7 +31,7 @@ export function CaseGenerator({
 }) {
   const navigate = useNavigate();
   const { user, ready } = useAuth();
-  const generate = useServerFn(generateCase);
+  const generate = generateCase;
   const [stages, setStages] = useState(4);
   const [startSetting, setStartSetting] = useState<SettingId>("auto");
   const [difficulty, setDifficulty] = useState<Difficulty>("advanced");

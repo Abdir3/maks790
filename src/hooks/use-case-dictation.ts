@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { transcribeAudio } from "@/lib/transcribe.functions";
 
 function blobToBase64(blob: Blob) {
@@ -15,7 +14,7 @@ function blobToBase64(blob: Blob) {
 }
 
 export function useCaseDictation(append: (questionId: string, text: string) => void) {
-  const transcribe = useServerFn(transcribeAudio);
+  const transcribe = transcribeAudio;
   const appendRef = useRef(append);
   appendRef.current = append;
   const recorderRef = useRef<MediaRecorder | null>(null);
