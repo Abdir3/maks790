@@ -1,12 +1,27 @@
 // Browser calls go directly to the authenticated Supabase Edge Function.
 import { createClientOnlyFn } from "@tanstack/react-start";
-import { callCaseApi } from "./case-api.client";
+import { callCaseApi, requestCaseApi } from "./case-api.client";
 import type { GenerateOptions, AnswerInput } from "./case-api-contract";
 import type { CaseDefinition } from "./case-model";
 import type { CaseFeedback, ModelAnswer } from "./case-contract";
 import type { sourcesFor } from "./case-sources.server";
 import type { GenerationProgress } from "./case-generation-progress";
+import type { GenerationJob } from "./case-generation-job";
 type Sources = ReturnType<typeof sourcesFor>;
+
+export const startCaseGeneration = createClientOnlyFn(
+  ({ data, requestId, owner }: { data: GenerateOptions; requestId: string; owner: string }) =>
+    requestCaseApi<{ definition: CaseDefinition }>({ action: "generate", requestId, data }, owner),
+);
+export const getGenerationStatus = createClientOnlyFn(async (owner: string) => {
+  const response = await requestCaseApi<{ job: GenerationJob | null }>(
+    { action: "generation-status" },
+    owner,
+  );
+  if (response.status !== "completed" || !response.result || !("job" in response.result))
+    throw new Error("Kunne ikke hente status for casen.");
+  return response.result.job;
+});
 
 export const generateCase = createClientOnlyFn(
   ({

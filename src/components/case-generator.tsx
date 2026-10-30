@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,7 +9,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
-import { generateCase } from "@/lib/cases.functions";
+import type { GenerateOptions } from "@/lib/case-api-contract";
+import type { GenerationJob } from "@/lib/case-generation-job";
 import {
   START_SETTINGS,
   TOPICS,
@@ -18,35 +19,48 @@ import {
   type Difficulty,
 } from "@/lib/case-variety";
 import type { CaseDefinition } from "@/lib/case-model";
-import type { GenerationProgress } from "@/lib/case-generation-progress";
 import { CaseGenerationProgress } from "./case-generation-progress";
 export type GeneratorFormat = "long" | "quick";
-const GENERATION_WAIT_MS = 21 * 60_000;
 export function CaseGenerator({
   format,
+  job,
+  starting,
+  submittedAt,
+  startedAt,
+  updatedAt,
+  checked,
+  error,
+  showCompleted,
+  onStart,
+  onRefresh,
   onClose,
   onReady,
 }: {
   format: GeneratorFormat | null;
+  job: GenerationJob | null;
+  starting: boolean;
+  submittedAt: number;
+  startedAt: number;
+  updatedAt: number | null;
+  checked: boolean;
+  error: string | null;
+  showCompleted: boolean;
+  onStart: (options: GenerateOptions) => void;
+  onRefresh: () => void;
   onClose: () => void;
   onReady: (definition: CaseDefinition) => void;
 }) {
   const navigate = useNavigate();
   const { user, ready } = useAuth();
-  const generate = generateCase;
   const [stages, setStages] = useState(4);
   const [startSetting, setStartSetting] = useState<SettingId>("auto");
   const [difficulty, setDifficulty] = useState<Difficulty>("advanced");
   const [topic, setTopic] = useState("auto");
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<GenerationProgress>({ phase: "preparing" });
-  const [startedAt, setStartedAt] = useState(0);
-  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
-  const activeRequest = useRef<symbol | null>(null);
-  const currentUserId = useRef(user?.id);
-  currentUserId.current = user?.id;
-  const waitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const pending = job?.status === "pending" ? job : null;
+  const completed = showCompleted && job?.status === "completed" ? job : null;
+  const busy = starting || Boolean(pending);
+  const activeFormat = pending?.format ?? format;
+  const failure = error ?? (job?.status === "failed" ? job.error : null);
   const compatible = isTopicSettingCompatible(topic, startSetting, format ?? undefined);
   const topicLabel = TOPICS.find((item) => item.id === topic)?.label ?? "Automatisk variasjon";
   const settingLabel =
@@ -56,93 +70,37 @@ export function CaseGenerator({
   useEffect(() => {
     if (format && !isTopicSettingCompatible(topic, startSetting, format)) setStartSetting("auto");
   }, [format, topic, startSetting]);
-  useEffect(() => setError(null), [format]);
   useEffect(() => {
-    // A request belongs to the account that started it, even if another tab signs out.
-    if (!activeRequest.current) return;
-    activeRequest.current = null;
-    if (waitTimer.current !== null) clearTimeout(waitTimer.current);
-    waitTimer.current = null;
-    setBusy(false);
-    setError(
-      "Innloggingen er endret. Casen kan fortsatt bli lagret på kontoen som startet den. Sjekk casebiblioteket på den kontoen før du prøver igjen.",
-    );
-  }, [user?.id]);
-  useEffect(
-    () => () => {
-      activeRequest.current = null;
-      if (waitTimer.current !== null) clearTimeout(waitTimer.current);
-    },
-    [],
-  );
+    if (!pending?.options) return;
+    if (pending.options.format === "long") setStages(pending.options.stages);
+    setStartSetting(pending.options.startSetting);
+    setDifficulty(pending.options.difficulty);
+    setTopic(pending.options.topic);
+  }, [pending?.id, pending?.options]);
   function changeTopic(nextTopic: string) {
     setTopic(nextTopic);
     if (!isTopicSettingCompatible(nextTopic, startSetting, format ?? undefined))
       setStartSetting("auto");
   }
-  async function run() {
-    if (!format || !ready || !user || activeRequest.current || !compatible) return;
-    const request = Symbol("case-request");
-    const requestOwner = user.id;
-    activeRequest.current = request;
-    const isCurrentRequest = () =>
-      activeRequest.current === request && currentUserId.current === requestOwner;
-    function releaseRequest() {
-      if (activeRequest.current !== request) return false;
-      activeRequest.current = null;
-      if (waitTimer.current !== null) clearTimeout(waitTimer.current);
-      waitTimer.current = null;
-      return true;
-    }
-    setBusy(true);
-    setError(null);
-    setProgress({ phase: "preparing" });
-    setStartedAt(Date.now());
-    setUpdatedAt(null);
-    waitTimer.current = setTimeout(() => {
-      if (!isCurrentRequest()) return;
-      if (!releaseRequest()) return;
-      setBusy(false);
-      setError(
-        "Dette tar lengre tid enn ventet. Casen kan fortsatt bli lagret. Sjekk casebiblioteket før du prøver igjen.",
-      );
-    }, GENERATION_WAIT_MS);
-    try {
-      const result = await generate({
-        data: { format, stages: format === "quick" ? 1 : stages, startSetting, difficulty, topic },
-        onProgress: (next) => {
-          if (!isCurrentRequest()) return;
-          setProgress(next);
-          setUpdatedAt(Date.now());
-        },
-      });
-      // A timed-out or unmounted request must not navigate later or affect a retry.
-      if (isCurrentRequest()) onReady(result.definition);
-    } catch (caught) {
-      if (isCurrentRequest())
-        setError(caught instanceof Error ? caught.message : "Kunne ikke lage casen. Prøv igjen.");
-    } finally {
-      if (releaseRequest()) setBusy(false);
-    }
+  function run() {
+    if (!format || !ready || !user || !checked || busy || !compatible) return;
+    onStart({ format, stages: format === "quick" ? 1 : stages, startSetting, difficulty, topic });
   }
   return (
     <Dialog
       open={format !== null}
       onOpenChange={(open) => {
-        if (!open && !activeRequest.current) {
-          setError(null);
-          onClose();
-        }
+        if (!open) onClose();
       }}
     >
-      <DialogContent className="case-library-dialog" closeDisabled={busy}>
+      <DialogContent className="case-library-dialog">
         <DialogHeader>
           <p className="case-eyebrow">MAKS790 / Ny øvingscase</p>
           <DialogTitle className="text-2xl">
-            {format === "quick" ? "Kort klinisk case" : "Lang eksamensøving"}
+            {activeFormat === "quick" ? "Kort klinisk case" : "Lang eksamensøving"}
           </DialogTitle>
           <DialogDescription className="pt-2">
-            {format === "quick"
+            {activeFormat === "quick"
               ? "Vurder mest sannsynlig diagnose, tolk funnene og forklar hva de betyr for videre håndtering."
               : "Et komplett pasientforløp med åpne oppgaver. Hele casen er tilgjengelig fra starten."}
           </DialogDescription>
@@ -158,12 +116,25 @@ export function CaseGenerator({
           </div>
         ) : (
           <div className="space-y-5">
-            {busy ? (
+            {completed?.definition ? (
+              <div className="space-y-4" role="status">
+                <p>Casen er klar og lagret i casebiblioteket på kontoen din.</p>
+                <Button className="w-full" onClick={() => onReady(completed.definition!)}>
+                  Åpne casen
+                </Button>
+              </div>
+            ) : busy ? (
               <CaseGenerationProgress
-                progress={progress}
-                startedAt={startedAt}
+                progress={
+                  starting ? { phase: "preparing" } : (pending?.progress ?? { phase: "queued" })
+                }
+                startedAt={starting ? submittedAt : startedAt}
                 updatedAt={updatedAt}
-                label={format === "quick" ? "Kort klinisk case" : `Eksamenscase · ${stages} deler`}
+                format={activeFormat ?? "quick"}
+                accepted={!starting && Boolean(pending)}
+                label={
+                  activeFormat === "quick" ? "Kort klinisk case" : `Eksamenscase · ${stages} deler`
+                }
               />
             ) : (
               <>
@@ -266,18 +237,37 @@ export function CaseGenerator({
                 </p>
               </>
             )}
-            {error && (
+            {failure && !starting && (
               <p role="alert" className="text-sm text-[#ef565c]">
-                {error}
+                {failure}
               </p>
             )}
-            <Button
-              className="w-full"
-              disabled={busy || !ready || !user || !compatible}
-              onClick={() => void run()}
-            >
-              {busy ? "Lager case …" : error ? "Prøv igjen med disse valgene" : "Lag øvingscase"}
-            </Button>
+            {busy ? (
+              <Button className="w-full" variant="outline" onClick={onClose}>
+                {starting ? "Lukk" : "Fortsett i bakgrunnen"}
+              </Button>
+            ) : !completed?.definition && !checked && user ? (
+              <div className="space-y-3">
+                <p role="status" className="text-sm text-muted-foreground">
+                  Sjekker om du allerede har en case under arbeid …
+                </p>
+                {error && (
+                  <Button className="w-full" variant="outline" onClick={onRefresh}>
+                    Sjekk status igjen
+                  </Button>
+                )}
+              </div>
+            ) : (
+              !completed?.definition && (
+                <Button
+                  className="w-full"
+                  disabled={!checked || !ready || !user || !compatible}
+                  onClick={run}
+                >
+                  {failure ? "Lag en ny case med disse valgene" : "Lag øvingscase"}
+                </Button>
+              )
+            )}
           </div>
         )}
       </DialogContent>

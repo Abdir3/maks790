@@ -4,6 +4,29 @@ Oppdatert 30. oktober 2026. Rapporten gjelder v3-implementeringen med Supabase s
 
 ## Raskere generering, 30. oktober
 
+### Bakgrunnskjøring og Ultrafast
+
+Supabase har nå en egen autentisert worker, umiddelbar oppstart etter lagret jobb og en femsekunders tidsplan som fortsetter arbeidet uten nettleser. Statuskall starter ingen generering. Pågående og ferdig case hentes fra samme konto etter reload, ny fane eller innlogging på en annen enhet. Et uklart svar på første bestilling starter ikke automatisk et nytt betalt modellkall. Private sjekkpunkter slettes ved avslutning; varighet, antall modellsteg og faktisk behandlingstier beholdes som private driftsmålinger.
+
+Generering bruker `gpt-6-astra`, medium resonnering og `service_tier: ultrafast`. Modell, prompt, skjema, kildegrunnlag, validering og reparasjonsgrense er uendret fra ettkallsversjonen nedenfor. Ultrafast koster mer per token. Behandlingstier er en serverinnstilling; tilbakemelding og modellbesvarelse bruker standardtier.
+
+Faktisk Supabase-kjøring uten ett eneste klient-poll frem til ferdigstillelse, deretter gjenfinning ved separat innlogging:
+
+| Case | Bestilling til tilgjengelig case | Modellkall |
+| --- | ---: | ---: |
+| Kort blodgass | 134,8 s | 1 |
+| Kort sirkulasjon, kompleks | 29,4 s | 1 |
+| Lang infeksjon, tre deler | 58,4 s | 1 |
+| Lang sirkulasjon, seks deler, kompleks | 53,5 s | 1 |
+
+Kjøring `eed831cd-2abe-44fe-925e-afce00518d29` kontrollerte også biblioteklagring, repetert bestilling uten duplikat, eierisolasjon, privat vurderingsgrunnlag og avvisning av uautorisert worker-kall. Alle fire ble ferdige innen målene på 150/180 sekunder. Dette er fire ulike kasus, ikke en p95-måling eller garanti mot senere leverandørforsinkelse.
+
+Reell lokal frontend mot den deployede Supabase-backenden: **37,6 sekunder fra knappetrykk til åpent arbeidsrom**. Neste case ble startet, dialogen lukket og alle nettleserfaner stengt. Serveren fullførte på 33,8 sekunder. En separat mobilkontekst (390 px), uten tidligere lokal lagring, logget inn på samme konto, fant «Casen er klar» og åpnet den uten overflyt eller nettleserfeil. Kjøring `937f9bdd-87dc-4eac-a5d7-b97d883a26b5`. Dette bekrefter den nye frontendkoden, ikke at Lovable allerede har publisert den.
+
+Claude Desktop ble konsultert i to runder om tidsmål, kontinuitet, bakgrunnskjøring og feiltester. Etter målingen på 66,5 sekunder for en lokal seksdelt Ultrafast-case anbefalte Claude å beholde én sammenhengende generering. Forslaget om å vise et ugyldig utkast ved tidsfrist ble avvist; kvalitetsporten består. Strukturell kontroll av de fire produksjonscasene fant bevart oppgavebredde, tidslinje, legemidler, blodgass, tolkede undersøkelser og privat vurderingsgrunnlag med gyldige kilde-ID-er. Dette er ikke uavhengig klinisk ekspertvurdering.
+
+### Tidligere ettkallsversjon på standardtier
+
 Den interaktive generatoren bruker nå ett Astra-kall ved gyldig første forslag. Separat blindløsning og modellkritikk er fjernet fra ventetiden; de finnes fortsatt som eksplisitt valg i kalibreringsverktøyet. Modellen, resonneringsnivået, prompten, pensumgrunnlaget og de raske kodede kontrollene er beholdt. Lagringen merker nye vurderingsgrunnlag `automatic`, uten å fabrikere en bestått modellkontroll. Eldre vurderingsgrunnlag kan fortsatt leses.
 
 Tre faktiske genereringer via Supabase brukte ett modellkall hver: kortcase med blodgass 101,9 sekunder, kortcase med sirkulasjon 71,1 sekunder og langcase med tre deler 173,0 sekunder. Den tidligere kjøringen brukte 145,8 sekunder for blodgasskortcasen og 406,8 sekunder for langcasen med samme format- og temavalg. Dette er ulike genererte caser og få målinger, ikke en garantert svartid eller et kontrollert kvalitetsstudium. Ny kjøring: `f8c5c2cf-db91-404d-ac15-6fc96e498578`.
@@ -34,7 +57,7 @@ Modellkontroll er ikke klinisk fagpersonsignering. Se `curriculum.md` og `case-g
 
 ## Faktisk verifikasjon
 
-Siste samlede kjøring: **107 tester bestått, 0 feilet**, med PGlite-testene aktivert. TypeScript, produksjonsbygg, ESLint for alle endrede kodefiler og `git diff --check` er bestått. Simulerte modellsvar er tekniske tester, ikke klinisk kalibrering.
+Siste samlede kjøring: **120 tester bestått, 0 feilet**, med PGlite-testene aktivert. TypeScript, produksjonsbygg, ESLint for alle endrede kodefiler og `git diff --check` er bestått. Simulerte modellsvar er tekniske tester, ikke klinisk kalibrering.
 
 ESLint er kjørt på de endrede kodefilene. Den tidligere kjøringen av hele prosjektet hadde eksisterende feil i automatisk genererte Supabase-filer og komponentadvarsler. Nettleserpakken er undersøkt for servernøkkelnavn og private serverkall; ingen slike treff ble funnet.
 

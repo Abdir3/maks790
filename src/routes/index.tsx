@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Landing } from "@/components/landing";
 import { CaseWorkspace } from "@/components/case-workspace";
 import { CaseGenerator, type GeneratorFormat } from "@/components/case-generator";
+import { GenerationNotice } from "@/components/generation-notice";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -22,6 +23,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
+import { useGenerationJob } from "@/hooks/use-generation-job";
+import { shouldOpenGeneratedCase } from "@/lib/case-generation-job";
+import type { GenerateOptions } from "@/lib/case-api-contract";
 import { cases } from "@/data/cases";
 import { allQuestions, draftKey, type CaseDefinition } from "@/lib/case-model";
 import {
@@ -75,6 +79,21 @@ function Index() {
   const navigate = Route.useNavigate();
   const [active, setActive] = useState<CaseDefinition | null>(null);
   const [generating, setGenerating] = useState<GeneratorFormat | null>(null);
+  const generation = useGenerationJob(userId, ready);
+  const [expectedJob, setExpectedJob] = useState<{
+    owner: string;
+    previousId: string | null;
+    id: string | null;
+  } | null>(null);
+  const [dismissedJobId, setDismissedJobId] = useState<string | null>(null);
+  const generatingRef = useRef(generating);
+  generatingRef.current = generating;
+  const lastCompletedJob = useRef<string | null>(null);
+  const expectedJobId =
+    expectedJob?.owner === userId && expectedJob
+      ? (expectedJob.id ??
+        (generation.job?.id !== expectedJob.previousId ? (generation.job?.id ?? null) : null))
+      : null;
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [library, setLibrary] = useState<{
     owner: string | undefined;
@@ -129,6 +148,36 @@ function Index() {
   }, [refresh]);
 
   useEffect(() => {
+    setExpectedJob(null);
+    setDismissedJobId(null);
+    setGenerating(null);
+    setActive(null);
+  }, [userId]);
+
+  useEffect(() => {
+    const job = generation.job;
+    if (!job || job.status !== "completed") return;
+    const completedKey = `${userId}:${job.id}`;
+    if (lastCompletedJob.current !== completedKey) {
+      lastCompletedJob.current = completedKey;
+      refresh();
+    }
+    if (
+      shouldOpenGeneratedCase({
+        requestedJobId: expectedJobId,
+        job,
+        dialogOpen: generating !== null,
+        pageVisible: document.visibilityState === "visible",
+      })
+    ) {
+      setGenerating(null);
+      setExpectedJob(null);
+      setDismissedJobId(job.id);
+      setActive(job.definition!);
+    }
+  }, [generation.job, expectedJobId, generating, refresh, userId]);
+
+  useEffect(() => {
     if (!openLibraryRequested) return;
     setLibraryOpen(true);
     refresh();
@@ -179,7 +228,26 @@ function Index() {
     if (!ready || signingOut) return;
     setLibraryOpen(false);
     if (!userId) login(selectedMode);
-    else setGenerating(selectedMode);
+    else {
+      const pending = generation.job?.status === "pending" ? generation.job : null;
+      setExpectedJob(pending ? { owner: userId, previousId: pending.id, id: pending.id } : null);
+      setGenerating(pending?.format ?? selectedMode);
+    }
+  };
+  const beginGeneration = async (options: GenerateOptions) => {
+    if (!userId) return;
+    const expectation = { owner: userId, previousId: generation.job?.id ?? null, id: null };
+    setExpectedJob(expectation);
+    const accepted = await generation.start(options);
+    if (accepted && currentUserId.current === userId && generatingRef.current)
+      setExpectedJob((current) =>
+        current === expectation ? { ...current, id: accepted.id } : current,
+      );
+  };
+  const closeGenerator = () => {
+    generatingRef.current = null;
+    setGenerating(null);
+    setExpectedJob(null);
   };
   const openLibrary = () => {
     setLibraryOpen(true);
@@ -187,8 +255,23 @@ function Index() {
   };
   const openCase = (definition: CaseDefinition) => {
     setLibraryOpen(false);
+    closeGenerator();
+    if (generation.job?.definition?.id === definition.id) setDismissedJobId(generation.job.id);
     setActive(definition);
   };
+
+  const backgroundJob =
+    generation.job && generation.job.id !== dismissedJobId ? generation.job : null;
+  const generationNotice = backgroundJob ? (
+    <GenerationNotice
+      job={backgroundJob}
+      onReview={() => start(backgroundJob.format)}
+      onOpen={() => {
+        if (backgroundJob.definition) openCase(backgroundJob.definition);
+      }}
+      onDismiss={() => setDismissedJobId(backgroundJob.id)}
+    />
+  ) : null;
   const logout = async () => {
     if (signingOut) return false;
     setSigningOut(true);
@@ -269,12 +352,24 @@ function Index() {
       />
       <CaseGenerator
         format={generating}
-        onClose={() => setGenerating(null)}
-        onReady={(definition) => {
-          setGenerating(null);
-          setActive(definition);
-        }}
+        job={generation.job}
+        starting={generation.starting}
+        submittedAt={generation.submittedAt}
+        startedAt={generation.startedAt}
+        updatedAt={generation.updatedAt}
+        checked={generation.checked}
+        error={generation.error}
+        showCompleted={Boolean(expectedJobId && expectedJobId === generation.job?.id)}
+        onStart={(options) => void beginGeneration(options)}
+        onRefresh={() => void generation.refresh()}
+        onClose={closeGenerator}
+        onReady={openCase}
       />
+      {!generating && !libraryOpen && generationNotice && (
+        <div className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-xl">
+          {generationNotice}
+        </div>
+      )}
       <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}>
         <DialogContent className="case-library-dialog">
           <DialogHeader>
@@ -289,6 +384,7 @@ function Index() {
             <h2 id="personal-cases-title" className="font-semibold">
               Dine genererte caser
             </h2>
+            {generationNotice}
             {!ready ? (
               <p role="status" className="text-sm text-muted-foreground">
                 Henter kontoen din …

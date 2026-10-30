@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "../integrations/supabase/types";
-import { actionSchema } from "./case-api-contract";
+import { actionSchema, type GenerateOptions } from "./case-api-contract";
 import {
   createBackgroundGenerator,
   digest,
@@ -35,13 +35,19 @@ type Job = {
   steps: ModelStep[];
   result: unknown;
   error: string | null;
+  created_at: string;
   expires_at: string;
+  generation_options?: GenerateOptions | null;
+  retry_count?: number;
+  needs_next_request?: boolean;
 };
 type Environment = {
   supabaseUrl: string;
   publicKey: string;
   serviceKey: string;
   openaiKey: string;
+  workerSecret?: string;
+  generationServiceTier?: string;
 };
 class ApiFault extends Error {
   constructor(
@@ -64,9 +70,48 @@ const pending = (job: Job, needsNextRequest = false) =>
     jobId: job.id,
     retryAfterMs: 2500,
     ...(job.kind === "generate"
-      ? { progress: generationProgress(job.steps, needsNextRequest) }
+      ? {
+          progress: generationProgress(job.steps, needsNextRequest || job.needs_next_request),
+          createdAt: job.created_at,
+          format: generationOptions(job)?.format,
+          options: generationOptions(job),
+        }
       : {}),
   });
+function generationOptions(job: Job): GenerateOptions | undefined {
+  return (
+    job.generation_options ??
+    (job.context.action?.action === "generate" ? job.context.action.data : undefined)
+  );
+}
+function publicGenerationJob(job: Job) {
+  const expired = job.status === "pending" && Date.parse(job.expires_at) <= Date.now();
+  const status = expired ? "failed" : job.status;
+  const definition =
+    job.status === "completed"
+      ? publicDefinition((job.result as { definition: unknown }).definition)
+      : undefined;
+  const options = generationOptions(job);
+  return {
+    id: job.id,
+    status,
+    format: options?.format ?? (definition && definition.parts.length > 1 ? "long" : "quick"),
+    createdAt: job.created_at,
+    ...(options ? { options } : {}),
+    ...(definition ? { definition } : {}),
+    ...(status === "pending"
+      ? { progress: generationProgress(job.steps, job.needs_next_request) }
+      : {}),
+    ...(status === "completed" ? { progress: { phase: "completed" } } : {}),
+    ...(status === "failed"
+      ? {
+          error: expired
+            ? "Oppgaven er utløpt. Prøv igjen."
+            : (job.error ?? "Oppgaven kunne ikke fullføres."),
+        }
+      : {}),
+  };
+}
 function safeError(error: unknown): string {
   if (error instanceof ApiFault || error instanceof AiProviderError) return error.message;
   if (
@@ -116,6 +161,176 @@ async function readInput(request: Request): Promise<Action> {
   } finally {
     await reader.cancel().catch(() => undefined);
     reader.releaseLock();
+  }
+}
+
+/** Advances one persisted, authenticated job under an atomic lease. Each call
+ * performs at most one provider request; a later worker resumes its checkpoint. */
+async function advanceCaseJob(
+  env: Environment,
+  job: Job,
+  authenticated: SupabaseClient<Database>,
+  admin: SupabaseClient<Database>,
+): Promise<Response> {
+  const jobs = admin as unknown as SupabaseClient;
+  const jobId = job.id;
+  const userId = job.user_id;
+  const lease = crypto.randomUUID();
+  const { data: claimed, error: claimError } = await jobs.rpc("claim_case_ai_job", {
+    p_id: jobId,
+    p_user_id: userId,
+    p_lease: lease,
+  });
+  if (claimError) throw new ApiFault(503, "Kunne ikke fortsette oppgaven.");
+  if (!claimed?.length) return pending(job);
+  const locked = claimed[0] as Job;
+  const save = async (changes: Record<string, unknown>) => {
+    const { data, error } = await jobs
+      .from("case_ai_jobs")
+      .update(changes)
+      .eq("id", jobId)
+      .eq("user_id", userId)
+      .eq("lease_token", lease)
+      .select("id")
+      .maybeSingle();
+    if (error || !data)
+      throw new ApiFault(503, "Kunne ikke lagre fremdriften. Prøv igjen med de samme valgene.");
+  };
+  try {
+    const generate = createBackgroundGenerator({
+      apiKey: env.openaiKey,
+      steps: locked.steps,
+      save: () => save({ steps: locked.steps, needs_next_request: false }),
+      serviceTier:
+        locked.kind === "generate"
+          ? env.generationServiceTier === "default" || env.generationServiceTier === "fast"
+            ? env.generationServiceTier
+            : "ultrafast"
+          : "default",
+    });
+    const input = locked.context.action;
+    let result: unknown;
+    if (input.action === "generate") {
+      if (!locked.context.draw || !locked.context.recent) throw new AiProviderError("unavailable");
+      const generated = await generateValidatedCase({
+        id: `gen-${jobId}`,
+        draw: locked.context.draw,
+        stages: input.data.stages,
+        recent: locked.context.recent,
+        generate,
+      });
+      // If the final checkpoint failed after the atomic case save, reuse it.
+      const { data: saved, error: readError } = await authenticated
+        .from("generated_cases")
+        .select("id")
+        .eq("id", jobId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (readError) throw new ApiFault(503, "Kunne ikke bekrefte lagringen.");
+      if (!saved)
+        await saveCaseWithAssessment(admin, {
+          id: jobId,
+          userId,
+          format: input.data.format,
+          definition: generated.definition,
+          assessment: generated.assessment,
+          draw: locked.context.draw,
+        });
+      result = { definition: generated.definition };
+    } else {
+      const { definition, assessment } = await loadOwnedAssessment(
+        authenticated,
+        admin,
+        userId,
+        input.data.id,
+      );
+      if (input.action === "assess") {
+        const ids = new Set(allQuestions(definition).map((q) => q.id));
+        if (Object.keys(input.data.answers).some((id) => !ids.has(id)))
+          throw new ApiFault(400, "Besvarelsen inneholder ukjente oppgaver.");
+        result = {
+          feedback: await generateFeedback(definition, assessment, input.data.answers, generate, {
+            solutionViewed: input.data.solutionViewed,
+          }),
+          sources: sourcesFor(assessment.sourceIds),
+        };
+      } else
+        result = {
+          modelAnswer: await generateModelAnswer(definition, assessment, generate),
+          sources: sourcesFor(assessment.sourceIds),
+        };
+    }
+    await save({
+      status: "completed",
+      result,
+      completed_at: new Date().toISOString(),
+      metrics:
+        locked.kind === "generate"
+          ? {
+              durationMs: Date.now() - Date.parse(locked.created_at),
+              providerSteps: locked.steps.length,
+              serviceTiers: locked.steps.map((step) => step.serviceTier ?? null),
+            }
+          : null,
+      context: {},
+      steps: [],
+      lease_token: null,
+      lease_until: null,
+    });
+    return json({
+      status: "completed",
+      result,
+      ...(locked.kind === "generate" ? { progress: { phase: "completed" } } : {}),
+    });
+  } catch (error) {
+    if (error instanceof PendingModel) {
+      await save({
+        lease_token: null,
+        lease_until: null,
+        next_attempt_at: new Date(Date.now() + 2000).toISOString(),
+        retry_count: 0,
+        needs_next_request: error.needsNextRequest,
+      });
+      return pending(locked, error.needsNextRequest);
+    }
+    if (error instanceof ApiFault && error.status === 503) {
+      // A transient database failure must not erase a completed model response
+      // or turn an already saved case into a failed job. Resume its checkpoint;
+      // if releasing the lease also fails, the bounded lease expires on its own.
+      await save({
+        lease_token: null,
+        lease_until: null,
+        next_attempt_at: new Date(Date.now() + 2500).toISOString(),
+      }).catch(() => undefined);
+      throw error;
+    }
+    // A known provider response can be polled again without buying another case.
+    // An ambiguous submission has no response ID and deliberately fails closed.
+    const canRetry =
+      error instanceof AiProviderError &&
+      ["unavailable", "timeout", "rate-limited"].includes(error.code) &&
+      locked.steps.some((step) => step.responseId && !Object.hasOwn(step, "output")) &&
+      (locked.retry_count ?? 0) < 3;
+    if (canRetry) {
+      const retries = (locked.retry_count ?? 0) + 1;
+      await save({
+        lease_token: null,
+        lease_until: null,
+        retry_count: retries,
+        next_attempt_at: new Date(Date.now() + 2500 * retries).toISOString(),
+      });
+      return pending(locked);
+    }
+    const message = safeError(error);
+    await save({
+      status: "failed",
+      error: message,
+      context: {},
+      steps: [],
+      lease_token: null,
+      lease_until: null,
+    });
+    return json({ error: message }, error instanceof ApiFault ? error.status : 422);
   }
 }
 
@@ -178,7 +393,23 @@ export function createCaseHandler(environment: () => Environment) {
           );
         return json({ status: "completed", result: { ok: true } });
       }
-      if (!env.openaiKey) throw new AiProviderError("authentication");
+      if (action.action === "generation-status") {
+        const { data: recentJob, error } = await jobs
+          .from("case_ai_jobs")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("kind", "generate")
+          .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) throw new ApiFault(503, "Kunne ikke hente fremdriften.");
+        return json({
+          status: "completed",
+          result: { job: recentJob ? publicGenerationJob(recentJob as Job) : null },
+        });
+      }
+      if (!env.openaiKey && action.action !== "poll") throw new AiProviderError("authentication");
       if (action.action === "transcribe") {
         const bytes = Uint8Array.from(atob(action.data.audio), (c) => c.charCodeAt(0));
         if (!bytes.length || bytes.length > 12000000)
@@ -257,6 +488,7 @@ export function createCaseHandler(environment: () => Environment) {
               kind: action.action,
               case_id: action.action === "generate" ? jobId : action.data.id,
               request_hash: requestHash,
+              generation_options: action.action === "generate" ? action.data : null,
               context,
             });
             if (insertError)
@@ -278,126 +510,82 @@ export function createCaseHandler(environment: () => Environment) {
       if (job.status === "completed")
         return json({
           status: "completed",
-          result: job.result,
+          jobId: job.id,
+          result:
+            job.kind === "generate"
+              ? { definition: publicGenerationJob(job).definition }
+              : job.result,
           ...(job.kind === "generate" ? { progress: { phase: "completed" } } : {}),
         });
       if (job.status === "failed")
         return json({ error: job.error ?? "Oppgaven kunne ikke fullføres." }, 422);
       if (Date.parse(job.expires_at) <= Date.now())
         throw new ApiFault(410, "Oppgaven er utløpt. Prøv igjen.");
-      const lease = crypto.randomUUID();
-      const { data: claimed, error: claimError } = await jobs.rpc("claim_case_ai_job", {
-        p_id: jobId,
-        p_user_id: userId,
-        p_lease: lease,
-      });
-      if (claimError) throw new ApiFault(503, "Kunne ikke fortsette oppgaven.");
-      if (!claimed?.length) return pending(job);
-      const locked = claimed[0] as Job;
-      const save = async (changes: Record<string, unknown>) => {
-        const { data, error } = await jobs
-          .from("case_ai_jobs")
-          .update(changes)
-          .eq("id", jobId)
-          .eq("user_id", userId)
-          .eq("lease_token", lease)
-          .select("id")
-          .maybeSingle();
-        if (error || !data)
-          throw new ApiFault(503, "Kunne ikke lagre fremdriften. Prøv igjen med de samme valgene.");
-      };
-      try {
-        const generate = createBackgroundGenerator({
-          apiKey: env.openaiKey,
-          steps: locked.steps,
-          save: () => save({ steps: locked.steps }),
-        });
-        const input = locked.context.action;
-        let result: unknown;
-        if (input.action === "generate") {
-          if (!locked.context.draw || !locked.context.recent)
-            throw new AiProviderError("unavailable");
-          const generated = await generateValidatedCase({
-            id: `gen-${jobId}`,
-            draw: locked.context.draw,
-            stages: input.data.stages,
-            recent: locked.context.recent,
-            generate,
-          });
-          // If the final checkpoint failed after the atomic case save, reuse it.
-          const { data: saved, error: readError } = await authenticated
-            .from("generated_cases")
-            .select("id")
-            .eq("id", jobId)
-            .eq("user_id", userId)
-            .maybeSingle();
-          if (readError) throw new ApiFault(503, "Kunne ikke bekrefte lagringen.");
-          if (!saved)
-            await saveCaseWithAssessment(admin, {
-              id: jobId,
-              userId,
-              format: input.data.format,
-              definition: generated.definition,
-              assessment: generated.assessment,
-              draw: locked.context.draw,
-            });
-          result = { definition: generated.definition };
-        } else {
-          const { definition, assessment } = await loadOwnedAssessment(
-            authenticated,
-            admin,
-            userId,
-            input.data.id,
-          );
-          if (input.action === "assess") {
-            const ids = new Set(allQuestions(definition).map((q) => q.id));
-            if (Object.keys(input.data.answers).some((id) => !ids.has(id)))
-              throw new ApiFault(400, "Besvarelsen inneholder ukjente oppgaver.");
-            result = {
-              feedback: await generateFeedback(
-                definition,
-                assessment,
-                input.data.answers,
-                generate,
-                { solutionViewed: input.data.solutionViewed },
-              ),
-              sources: sourcesFor(assessment.sourceIds),
-            };
-          } else
-            result = {
-              modelAnswer: await generateModelAnswer(definition, assessment, generate),
-              sources: sourcesFor(assessment.sourceIds),
-            };
-        }
-        await save({
-          status: "completed",
-          result,
-          context: {},
-          steps: [],
-          lease_token: null,
-          lease_until: null,
-        });
-        return json({
-          status: "completed",
-          result,
-          ...(locked.kind === "generate" ? { progress: { phase: "completed" } } : {}),
-        });
-      } catch (error) {
-        if (error instanceof PendingModel) {
-          await save({ lease_token: null, lease_until: null });
-          return pending(locked, error.needsNextRequest);
-        }
-        const message = safeError(error);
-        await save({
+      // Generation runs on the server scheduler. Viewing its status never
+      // starts provider work, so it finishes even when every browser is closed.
+      if (job.kind === "generate") return pending(job);
+      return await advanceCaseJob(env, job, authenticated, admin);
+    } catch (error) {
+      return json({ error: safeError(error) }, error instanceof ApiFault ? error.status : 503);
+    }
+  };
+}
+
+/** Internal scheduler endpoint. It accepts no job, owner, prompt or credentials
+ * from its body: only jobs already accepted by the authenticated API can run. */
+export function createCaseWorker(environment: () => Environment) {
+  return async (request: Request): Promise<Response> => {
+    if (request.method !== "POST") return json({ error: "Metoden støttes ikke." }, 405);
+    const supplied = request.headers.get("x-case-worker-secret");
+    if (!supplied || supplied.length < 32 || supplied.length > 256)
+      return json({ error: "Ikke autorisert." }, 401);
+    try {
+      const env = environment();
+      if (!env.workerSecret || env.workerSecret.length < 32)
+        throw new ApiFault(503, "Arbeidstjenesten er ikke konfigurert.");
+      // Compare fixed-length digests; do not leak where a secret differs.
+      const [actual, expected] = await Promise.all([digest(supplied), digest(env.workerSecret)]);
+      let difference = 0;
+      for (let index = 0; index < expected.length; index++)
+        difference |= actual.charCodeAt(index) ^ expected.charCodeAt(index);
+      if (difference) return json({ error: "Ikke autorisert." }, 401);
+      if (!env.supabaseUrl || !env.serviceKey || !env.openaiKey)
+        throw new ApiFault(503, "Arbeidstjenesten er ikke konfigurert.");
+      const admin = database(env.supabaseUrl, env.serviceKey);
+      const jobs = admin as unknown as SupabaseClient;
+      const now = new Date().toISOString();
+      const { error: expireError } = await jobs
+        .from("case_ai_jobs")
+        .update({
           status: "failed",
-          error: message,
+          error: "Oppgaven er utløpt. Prøv igjen.",
           context: {},
           steps: [],
           lease_token: null,
           lease_until: null,
-        });
-        return json({ error: message }, error instanceof ApiFault ? error.status : 422);
-      }
+        })
+        .eq("status", "pending")
+        .lte("expires_at", now);
+      if (expireError) throw new ApiFault(503, "Kunne ikke rydde utløpte oppgaver.");
+      const { data, error } = await jobs
+        .from("case_ai_jobs")
+        .select("*")
+        .eq("status", "pending")
+        .gt("expires_at", now)
+        .lte("next_attempt_at", now)
+        .or(`lease_until.is.null,lease_until.lt.${now}`)
+        .order("next_attempt_at", { ascending: true })
+        .limit(8);
+      if (error) throw new ApiFault(503, "Kunne ikke hente oppgavene.");
+      // Account identity comes from the private job row, never a caller's input.
+      // Persistence helpers still require explicit owner predicates on every read.
+      const results = await Promise.allSettled(
+        (data ?? []).map((row) => advanceCaseJob(env, row as Job, admin, admin)),
+      );
+      return json({
+        processed: results.length,
+        errors: results.filter((result) => result.status === "rejected" || !result.value.ok).length,
+      });
     } catch (error) {
       return json({ error: safeError(error) }, error instanceof ApiFault ? error.status : 503);
     }

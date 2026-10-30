@@ -17,6 +17,9 @@ it(
       CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY);
       INSERT INTO auth.users VALUES ('00000000-0000-4000-8000-000000000001'), ('00000000-0000-4000-8000-000000000002');`);
       await db.exec(await readFile("supabase/migrations/20261030150000_case_ai_jobs.sql", "utf8"));
+      await db.exec(
+        await readFile("supabase/migrations/20261030160000_durable_case_jobs.sql", "utf8"),
+      );
       await db.exec(`INSERT INTO public.case_ai_jobs(id,user_id,case_id,kind,request_hash,context)
       VALUES('00000000-0000-4000-8000-000000000010','00000000-0000-4000-8000-000000000001',
       '00000000-0000-4000-8000-000000000010','generate','test','{}');`);
@@ -52,6 +55,11 @@ it(
       '00000000-0000-4000-8000-000000000011','generate','second','{}')`),
       );
       await db.exec("UPDATE public.case_ai_jobs SET lease_until = now() - interval '1 second'");
+      await db.exec(
+        "UPDATE public.case_ai_jobs SET next_attempt_at = now() + interval '5 seconds'",
+      );
+      assert.equal((await claim(owner, "00000000-0000-4000-8000-000000000021")).rows.length, 0);
+      await db.exec("UPDATE public.case_ai_jobs SET next_attempt_at = now() - interval '1 second'");
       assert.equal((await claim(owner, "00000000-0000-4000-8000-000000000021")).rows.length, 1);
       await db.exec("UPDATE public.case_ai_jobs SET status = 'completed', lease_until = NULL");
       assert.equal((await claim(owner, "00000000-0000-4000-8000-000000000022")).rows.length, 0);
