@@ -47,7 +47,9 @@ type Environment = {
   serviceKey: string;
   openaiKey: string;
   workerSecret?: string;
-  generationServiceTier?: string;
+  jobBudgetUsd?: string;
+  ownerDailyBudgetUsd?: string;
+  projectDailyBudgetUsd?: string;
 };
 class ApiFault extends Error {
   constructor(
@@ -56,6 +58,39 @@ class ApiFault extends Error {
   ) {
     super(message);
   }
+}
+function budgetLimit(value: string | undefined, maximum: number): number {
+  if (value === undefined || value === "") return maximum;
+  const parsed = Number(value);
+  // Invalid settings stop new purchases rather than removing their limits.
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(maximum, parsed)) : 0;
+}
+function privateJobMetrics(job: Job) {
+  const sum = (
+    field:
+      | "maximumCostUsd"
+      | "inputTokens"
+      | "outputTokens"
+      | "reasoningTokens"
+      | "cacheWriteTokens"
+      | "cachedInputTokens",
+  ) =>
+    job.steps.reduce((total, step) => {
+      const value = step[field];
+      return total + (typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0);
+    }, 0);
+  return {
+    durationMs: Date.now() - Date.parse(job.created_at),
+    providerSteps: job.steps.length,
+    models: job.steps.map((step) => step.model ?? step.requestedModel ?? null),
+    serviceTiers: job.steps.map((step) => step.serviceTier ?? null),
+    maximumCostUsd: Math.round(sum("maximumCostUsd") * 1000000) / 1000000,
+    inputTokens: sum("inputTokens"),
+    outputTokens: sum("outputTokens"),
+    reasoningTokens: sum("reasoningTokens"),
+    cacheWriteTokens: sum("cacheWriteTokens"),
+    cachedInputTokens: sum("cachedInputTokens"),
+  };
 }
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -201,12 +236,36 @@ async function advanceCaseJob(
       apiKey: env.openaiKey,
       steps: locked.steps,
       save: () => save({ steps: locked.steps, needs_next_request: false }),
-      serviceTier:
+      maxSteps: locked.kind === "generate" ? 2 : 4,
+      maxOutputTokens:
         locked.kind === "generate"
-          ? env.generationServiceTier === "default" || env.generationServiceTier === "fast"
-            ? env.generationServiceTier
-            : "ultrafast"
-          : "default",
+          ? generationOptions(locked)?.format === "long"
+            ? 22000
+            : 18000
+          : 16000,
+      beforeSubmit: async ({ step, requestHash, maximumCostUsd }) => {
+        const { data, error } = await jobs.rpc("reserve_case_ai_spend", {
+          p_job_id: jobId,
+          p_user_id: userId,
+          p_lease: lease,
+          p_step: step,
+          p_request_hash: requestHash,
+          p_maximum_cost_usd: maximumCostUsd,
+          p_job_limit: budgetLimit(env.jobBudgetUsd, 0.5),
+          p_owner_limit: budgetLimit(env.ownerDailyBudgetUsd, 1),
+          p_project_limit: budgetLimit(env.projectDailyBudgetUsd, 2),
+        });
+        if (error || !data || typeof data.allowed !== "boolean")
+          throw new ApiFault(
+            503,
+            "Kunne ikke bekrefte kostnadsgrensen. Ingen ny KI-forespørsel er sendt.",
+          );
+        if (!data.allowed)
+          throw new ApiFault(
+            429,
+            "Kostnadsgrensen er nådd. Ingen flere KI-kall blir startet for dette forsøket. Prøv senere, eller åpne en lagret case fra biblioteket.",
+          );
+      },
     });
     const input = locked.context.action;
     let result: unknown;
@@ -264,14 +323,7 @@ async function advanceCaseJob(
       status: "completed",
       result,
       completed_at: new Date().toISOString(),
-      metrics:
-        locked.kind === "generate"
-          ? {
-              durationMs: Date.now() - Date.parse(locked.created_at),
-              providerSteps: locked.steps.length,
-              serviceTiers: locked.steps.map((step) => step.serviceTier ?? null),
-            }
-          : null,
+      metrics: privateJobMetrics(locked),
       context: {},
       steps: [],
       lease_token: null,
@@ -325,6 +377,8 @@ async function advanceCaseJob(
     await save({
       status: "failed",
       error: message,
+      completed_at: new Date().toISOString(),
+      metrics: privateJobMetrics(locked),
       context: {},
       steps: [],
       lease_token: null,

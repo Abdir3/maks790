@@ -51,13 +51,19 @@ function fixtureJob() {
     retry_count: 0,
     lease_token: null as string | null,
     lease_until: null as string | null,
-    metrics: null as null | { durationMs: number; providerSteps: number; serviceTiers: unknown[] },
+    metrics: null as null | {
+      durationMs: number;
+      providerSteps: number;
+      serviceTiers: unknown[];
+      maximumCostUsd: number;
+    },
   };
 }
 function mockDatabase(
   job: ReturnType<typeof fixtureJob>,
   provider: (init?: RequestInit) => Response | Promise<Response>,
   beforePatch?: (body: Record<string, unknown>) => Response | undefined,
+  reserve?: (body: Record<string, unknown>) => Response,
 ) {
   const requests: { url: URL; method: string; body?: Record<string, unknown> }[] = [];
   let saves = 0;
@@ -74,6 +80,16 @@ function mockDatabase(
       if (job.status !== "pending" || job.lease_token) return Response.json([]);
       job.lease_token = body.p_lease;
       return Response.json([job]);
+    }
+    if (url.pathname === "/rest/v1/rpc/reserve_case_ai_spend") {
+      assert.equal(body.p_job_id, jobId);
+      assert.equal(body.p_user_id, userId);
+      assert.equal(body.p_lease, job.lease_token);
+      assert.ok(body.p_maximum_cost_usd > 0);
+      assert.match(body.p_request_hash, /^[a-f0-9]{64}$/);
+      return (
+        reserve?.(body) ?? Response.json({ allowed: true, reservedUsd: body.p_maximum_cost_usd })
+      );
     }
     if (url.pathname === "/rest/v1/rpc/create_case_with_assessment") {
       assert.equal(body.p_user_id, userId);
@@ -147,14 +163,14 @@ describe("Durable server generation", () => {
       providerCalls++;
       assert.equal(init?.method, providerCalls === 1 ? "POST" : "GET");
       if (providerCalls === 1) {
-        assert.equal(JSON.parse(String(init?.body)).service_tier, "ultrafast");
+        assert.equal(JSON.parse(String(init?.body)).service_tier, "default");
         return Response.json({ id: "resp_durable", status: "queued" });
       }
       return Response.json({
         id: "resp_durable",
         status: "completed",
-        model: "gpt-6-astra",
-        service_tier: "ultrafast",
+        model: "gpt-6.1-terra",
+        service_tier: "default",
         output_text: JSON.stringify(generatedFixture()),
       });
     });
@@ -169,10 +185,18 @@ describe("Durable server generation", () => {
       assert.equal(job.status, "completed");
       assert.equal(db.saved(), 1);
       assert.equal(providerCalls, 2);
+      assert.equal(
+        db.requests.filter((r) => r.url.pathname.endsWith("reserve_case_ai_spend")).length,
+        1,
+      );
+      assert.ok(
+        db.requests.findIndex((r) => r.url.pathname.endsWith("reserve_case_ai_spend")) <
+          db.requests.findIndex((r) => r.url.host === "api.openai.com"),
+      );
       assert.deepEqual(job.context, {});
       assert.deepEqual(job.steps, []);
       assert.equal(job.metrics?.providerSteps, 1);
-      assert.deepEqual(job.metrics?.serviceTiers, ["ultrafast"]);
+      assert.deepEqual(job.metrics?.serviceTiers, ["default"]);
       assert.ok((job.metrics?.durationMs ?? -1) >= 0);
       assert.deepEqual(await (await worker(workerRequest())).json(), { processed: 0, errors: 0 });
       assert.equal(providerCalls, 2);
@@ -221,6 +245,116 @@ describe("Durable server generation", () => {
     }
   });
 
+  it("blocks a new provider purchase when the atomic budget reservation is denied", async () => {
+    const original = globalThis.fetch;
+    const job = fixtureJob();
+    let providerCalls = 0;
+    const db = mockDatabase(
+      job,
+      () => {
+        providerCalls++;
+        throw new Error("must not purchase");
+      },
+      undefined,
+      () => Response.json({ allowed: false, reason: "project-limit" }),
+    );
+    globalThis.fetch = db.transport;
+    try {
+      await createCaseWorker(() => env)(workerRequest());
+      assert.equal(providerCalls, 0);
+      assert.equal(job.status, "failed");
+      assert.match(job.error!, /Kostnadsgrensen/);
+      assert.equal(job.metrics?.providerSteps, 0);
+      assert.equal(db.saved(), 0);
+      assert.deepEqual(job.steps, []);
+      assert.deepEqual(job.context, {});
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("does not purchase when the budget database is unavailable and recovers safely", async () => {
+    const original = globalThis.fetch;
+    const job = fixtureJob();
+    let reserveCalls = 0,
+      providerCalls = 0;
+    const db = mockDatabase(
+      job,
+      () => {
+        providerCalls++;
+        return Response.json({ id: "resp_budget_recovery", status: "queued" });
+      },
+      undefined,
+      () =>
+        ++reserveCalls === 1
+          ? Response.json({ message: "private database problem" }, { status: 503 })
+          : Response.json({ allowed: true }),
+    );
+    globalThis.fetch = db.transport;
+    try {
+      const worker = createCaseWorker(() => env);
+      await worker(workerRequest());
+      assert.equal(providerCalls, 0);
+      assert.equal(job.status, "pending");
+      assert.equal(job.lease_token, null);
+      await worker(workerRequest());
+      assert.equal(providerCalls, 1);
+      assert.equal(job.status, "pending");
+      assert.equal(job.steps[0]!.responseId, "resp_budget_recovery");
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("retains cost metrics after a charged or ambiguous failed attempt", async () => {
+    const original = globalThis.fetch;
+    const job = fixtureJob();
+    const db = mockDatabase(job, () => {
+      throw new Error("response lost after provider accepted request");
+    });
+    globalThis.fetch = db.transport;
+    try {
+      await createCaseWorker(() => env)(workerRequest());
+      assert.equal(job.status, "failed");
+      assert.equal(job.metrics?.providerSteps, 1);
+      assert.ok((job.metrics?.maximumCostUsd ?? 0) > 0);
+      assert.equal(db.requests.filter((r) => r.url.host === "api.openai.com").length, 1);
+      assert.deepEqual(job.steps, []);
+      assert.deepEqual(job.context, {});
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("passes only lower server budget overrides and treats malformed settings as zero", async () => {
+    const original = globalThis.fetch;
+    const job = fixtureJob();
+    const db = mockDatabase(
+      job,
+      () => Response.json({ id: "resp_limits", status: "queued" }),
+      undefined,
+      (body) => {
+        assert.equal(body.p_job_limit, 0.5);
+        assert.equal(body.p_owner_limit, 0.25);
+        assert.equal(body.p_project_limit, 0);
+        return Response.json({ allowed: false, reason: "project-limit" });
+      },
+    );
+    globalThis.fetch = db.transport;
+    try {
+      await createCaseWorker(() => ({
+        ...env,
+        jobBudgetUsd: "999",
+        ownerDailyBudgetUsd: "0.25",
+        projectDailyBudgetUsd: "bad",
+      }))(workerRequest());
+      assert.equal(job.status, "failed");
+      assert.equal(db.requests.filter((r) => r.url.host === "api.openai.com").length, 0);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
   it("recovers the repair milestone and keeps invalid drafts private until the repaired case passes", async () => {
     const original = globalThis.fetch;
     const job = fixtureJob();
@@ -231,7 +365,7 @@ describe("Durable server generation", () => {
       return Response.json({
         id: `resp_repair${calls}`,
         status: "completed",
-        model: "gpt-6-astra",
+        model: "gpt-6.1-terra",
         output_text: JSON.stringify(draft),
       });
     });
@@ -292,7 +426,7 @@ describe("Durable server generation", () => {
       return Response.json({
         id: "resp_retry",
         status: "completed",
-        model: "gpt-6-astra",
+        model: "gpt-6.1-terra",
         output_text: JSON.stringify(generatedFixture()),
       });
     });
@@ -359,7 +493,7 @@ describe("Durable server generation", () => {
         return Response.json({
           id: "resp_saved",
           status: "completed",
-          model: "gpt-6-astra",
+          model: "gpt-6.1-terra",
           output_text: JSON.stringify(generatedFixture()),
         });
       },

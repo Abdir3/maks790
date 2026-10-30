@@ -9,7 +9,8 @@ import {
   generateModelAnswer,
   assessmentContext,
 } from "../src/lib/case-feedback.server";
-import { generateJson, readResponseJson } from "../src/lib/ai-gateway.server";
+import { generateJson } from "../src/lib/ai-gateway.server";
+import { requestBudget } from "../src/lib/ai-policy.server";
 import { allQuestions, type CaseDefinition } from "../src/lib/case-model";
 import { SOURCE_VERSION } from "../src/lib/case-sources.server";
 
@@ -215,38 +216,15 @@ async function loadJson(path: string): Promise<unknown | undefined> {
   }
 }
 
-// Verification fallback only. The application continues to use Lovable.
-export const generateOpenAiJson: JsonGenerator = async (args) => {
-  const apiKey = process.env["OPENAI_API_KEY"];
-  if (!apiKey) throw new Error("OPENAI_API_KEY mangler; ingen direkte OpenAI-test er kjørt.");
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    signal: AbortSignal.timeout(240000),
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: "gpt-6-astra",
-      store: false,
-      stream: true,
-      instructions: args.instructions,
-      input: [{ role: "user", content: args.input }],
-      reasoning: { effort: args.effort ?? "medium" },
-      text: {
-        format: { type: "json_schema", name: args.schemaName, strict: true, schema: args.schema },
-      },
-    }),
-  });
-  if (!response.ok || !response.body)
-    throw new Error(
-      `OpenAI-testforespørselen feilet (HTTP ${response.status}). Ingen produksjonstest av Lovable er utført.`,
-    );
-  return readResponseJson(response.body);
-};
+// Offline checks use the same bounded Terra request policy as the application.
+export const generateOpenAiJson: JsonGenerator = generateJson;
 
 export async function runCalibration(options: {
   seed: number;
   out: string;
   only?: string;
-  provider?: "lovable" | "openai";
+  provider?: "openai";
+  budgetUsd?: number;
   phase?: "generate" | "feedback" | "all";
   resume?: string;
   generate?: JsonGenerator;
@@ -255,9 +233,19 @@ export async function runCalibration(options: {
     (item) => !options.only || item.id === options.only,
   );
   if (!plan.length) throw new Error("Det valgte kalibreringseksempelet finnes ikke.");
-  const provider = options.provider ?? "lovable";
+  const provider = options.provider ?? "openai";
   const phase = options.phase ?? "generate";
-  const keyName = provider === "openai" ? "OPENAI_API_KEY" : "LOVABLE_API_KEY";
+  const keyName = "OPENAI_API_KEY";
+  if (
+    !options.generate &&
+    (!Number.isFinite(options.budgetUsd) ||
+      !options.budgetUsd ||
+      options.budgetUsd <= 0 ||
+      options.budgetUsd > 0.5)
+  )
+    throw new Error(
+      "Live-kalibrering krever et eksplisitt --budget-usd mellom 0 og 0.50. Ingen KI-kall er startet.",
+    );
   if (!options.generate && !process.env[keyName])
     throw new Error(
       `Live-kalibrering er ikke kjørt: ${keyName} mangler. --dry-run kontrollerer bare utvalget; det er ingen klinisk godkjenning.`,
@@ -298,7 +286,8 @@ export async function runCalibration(options: {
   const records: RunRecord[] = [];
   const recent: CaseDefinition[] = [];
   let gatewayResponses = 0;
-  const gateway = options.generate ?? (provider === "openai" ? generateOpenAiJson : generateJson);
+  const gateway = options.generate ?? generateOpenAiJson;
+  let reservedUsd = 0;
   for (const item of plan) {
     const caseFolder = resolve(folder, item.id);
     await mkdir(caseFolder, { recursive: true });
@@ -309,6 +298,12 @@ export async function runCalibration(options: {
     );
     const previousCalls = calls;
     const observed: JsonGenerator = async (request) => {
+      if (!options.generate) {
+        const budget = requestBudget(request, 22000);
+        if (!budget || reservedUsd + budget.maximumCostUsd > options.budgetUsd!)
+          throw new Error("Kalibreringens kostnadsgrense er nådd. Ingen flere KI-kall er startet.");
+        reservedUsd += budget.maximumCostUsd;
+      }
       const stem = `${String(++calls).padStart(3, "0")}-${request.schemaName}`;
       console.log(`${item.id}: ${request.schemaName} (${calls})`);
       await saveJson(resolve(caseFolder, `${stem}-request.json`), request);
@@ -444,11 +439,8 @@ export async function runCalibration(options: {
     provider,
     phase,
     records,
-    productionGatewayVerified:
-      provider === "lovable" &&
-      !options.generate &&
-      gatewayResponses > 0 &&
-      records.every((record) => record.status !== "failed"),
+    productionGatewayVerified: false,
+    maximumReservedUsd: reservedUsd,
     executionMode: options.generate ? "injected-test" : "live",
     automatedComplete: records.filter((record) => record.status === "automated-checks-complete")
       .length,
@@ -459,7 +451,7 @@ export async function runCalibration(options: {
     resolve(folder, `REVIEW-${runId}.md`),
     [
       "# Klinisk kalibrering – kontrollgrunnlag",
-      `Leverandør: ${provider}. Fase: ${phase}. ${provider === "openai" ? "Direkte OpenAI er en verifikasjonsreserve; Lovable-integrasjonen er ikke testet av denne kjøringen." : "Lovable-gatewayen brukes."} Besvarelsesprofilene er modellgenererte, ikke ekspertmerkede fasitsvar. Automatiske kontroller og en modellkontroll dokumenterer ikke klinisk kvalitet alene.`,
+      `Leverandør: ${provider}. Fase: ${phase}. Direkte Terra-kall tester innholdskjeden, ikke produksjonsintegrasjonen i Supabase. Besvarelsesprofilene er modellgenererte, ikke ekspertmerkede fasitsvar. Automatiske kontroller og en modellkontroll dokumenterer ikke klinisk kvalitet alene.`,
       "| Case | Automatisk utfall | Modellkall |",
       "| --- | --- | ---: |",
       ...records.map((record) => `| ${record.id} | ${record.status} | ${record.modelCalls} |`),
@@ -494,16 +486,16 @@ async function main() {
     return;
   }
   const only = value("--case") ?? value("--only");
-  const provider = value("--provider") ?? "lovable";
+  const provider = value("--provider") ?? "openai";
   const phase = value("--phase") ?? "generate";
-  if (provider !== "lovable" && provider !== "openai")
-    throw new Error("--provider må være lovable eller openai.");
+  if (provider !== "openai") throw new Error("--provider må være openai.");
   if (phase !== "generate" && phase !== "feedback" && phase !== "all")
     throw new Error("--phase må være generate, feedback eller all.");
   const resume = value("--resume");
   const result = await runCalibration({
     seed,
     provider,
+    budgetUsd: Number(value("--budget-usd")),
     phase,
     out: value("--out") ?? resolve("work", "calibration"),
     ...(only ? { only } : {}),

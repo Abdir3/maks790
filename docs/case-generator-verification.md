@@ -2,6 +2,18 @@
 
 Oppdatert 30. oktober 2026. Rapporten gjelder v3-implementeringen med Supabase som backend og direkte OpenAI-kall. Lovable brukes til publisering av nettsiden.
 
+## Kostnadskorreksjon og Terra
+
+Astra Ultrafast er erstattet med `gpt-6.1-terra` på standardtier for generering, tilbakemelding og modellbesvarelse. Ingen innstilling kan aktivere premiumtier eller Astra som reserve. Fire tidligere lokale ytelsesmålinger alene hadde omtrent USD 9,22 i tokenkostnad etter dokumenterte satser. Seks ytterligere produksjonstester manglet bevart tokenbruk, så hele brukerens rapporterte USD 25 kan ikke fordeles nøyaktig. Den tidligere testkjøringen manglet en fast kostnadsgrense og var for dyr.
+
+En privat SQL-logg reserverer konservativ maksimal kostnad atomisk før hvert nye modellkall. Grenser: USD 0,50 per jobb, USD 1 per konto per rullerende døgn og USD 2 samlet per rullerende døgn. Reservasjoner blir stående etter feil, sletting og tvetydige nettverkssvar. Generering har høyst to betalte kall; tilbakemelding og modellbesvarelse høyst fire innen samme beløpsgrenser. Input og output/resonnering har eksplisitte størrelsesgrenser. Privat driftslogg beholder tokenbruk og modell også når jobben feiler. Dette er applikasjonens konservative kostnadsgrense, ikke OpenAI-fakturaen; diktering og bruk utenfor appen omfattes ikke.
+
+Undersøkelsen fant én ferdig case med intakt vurderingsgrunnlag i brukerens bibliotek. En senere feil med oppbrukt OpenAI-kreditt overtok siste-statusvisningen. Frontend tilbyr nå «Åpne siste lagrede case» etter feil, uten nye modellkall og med samme eierkontroll. Den eldre ferdige jobben hadde omtrent 14 min 36 sek mellom opprettelse og lagring; gammel logg skiller ikke venting, brukerens polling og leverandørtid. De tidligere små ytelsestestene nedenfor dokumenterer derfor ingen maksimal produksjonstid.
+
+129 automatiske tester, inkludert SQL-budsjett, samtidige forespørsler, eierkontroll og token-/forsøksgrenser, bestod. Fire målrettede nettleserkontroller og 17 tidligere bakgrunnskontroller bestod. Den lokale kalibreringskommandoen krever nå et eksplisitt budsjett på høyst USD 0,50; ingen ny betalt testserie er kjørt.
+
+To avgrensede forsøk ble gjort for å levere en faktisk case til brukerens konto. Første Terra-forsøk nådde grensen på 12 000 outputtokens og stoppet etter ett kall (omtrent USD 0,07–0,08 etter tokenbruk). Grensen for kortcase ble økt til 18 000 innen samme dollargrense, og utkastet fikk `text.verbosity: low` med uendret klinisk prompt, medium resonnering, skjema og validering. Neste forsøk fullførte på **53,6 sekunder**, med 7 782 inputtokens og 4 018 outputtokens, inkludert 452 resonneringstokens. Anslått tokenkostnad er USD 0,03–0,04 avhengig av cachepris. Casen «Vakt: Sengepost» ble lagret i brukerens bibliotek, med privat vurderingsgrunnlag. Beløpene er beregnet fra tokenbruk og offisielle satser, ikke en hentet faktura. Ingen flere betalte prøvekjøringer ble startet.
+
 ## Raskere generering, 30. oktober
 
 ### Bakgrunnskjøring og Ultrafast

@@ -24,37 +24,146 @@ const args = {
 const response = (status: string, output?: string) =>
   Response.json({
     id: "resp_test",
-    model: "gpt-6-astra",
+    model: "gpt-6.1-terra",
     status,
     ...(output ? { output: [{ content: [{ type: "output_text", text: output }] }] } : {}),
   });
 
-describe("Resumable Astra responses", () => {
-  it("uses the requested processing tier without changing model, reasoning or schema", async () => {
+describe("Resumable Terra responses", () => {
+  it("retains usage and stops an output-limit failure without accepting partial JSON", async () => {
     const steps: ModelStep[] = [];
     const generate = createBackgroundGenerator({
       apiKey: "test",
       steps,
-      serviceTier: "ultrafast",
+      save: async () => {},
+      maxOutputTokens: 18000,
+      transport: (async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        assert.equal(body.text.verbosity, "low");
+        assert.equal(body.max_output_tokens, 18000);
+        return Response.json({
+          id: "resp_test",
+          model: "gpt-6.1-terra",
+          status: "incomplete",
+          incomplete_details: { reason: "max_output_tokens" },
+          usage: { input_tokens: 1000, output_tokens: 18000 },
+          output_text: '{"partial":',
+        });
+      }) as typeof fetch,
+    });
+    await assert.rejects(
+      generate({ ...args, schemaName: "case_draft_v3" }),
+      (error: unknown) => error instanceof AiProviderError && error.code === "output-limit",
+    );
+    assert.equal(steps[0]?.outputTokens, 18000);
+    assert.equal(Object.hasOwn(steps[0]!, "output"), false);
+  });
+  it("pins Terra to standard pricing and preserves reasoning and schema", async () => {
+    const steps: ModelStep[] = [];
+    const generate = createBackgroundGenerator({
+      apiKey: "test",
+      steps,
+      serviceTier: "default",
       save: async () => {},
       transport: (async (_url, init) => {
         const body = JSON.parse(String(init?.body));
-        assert.equal(body.service_tier, "ultrafast");
-        assert.equal(body.model, "gpt-6-astra");
+        assert.equal(body.service_tier, "default");
+        assert.equal(body.max_output_tokens, 16000);
+        assert.equal(body.model, "gpt-6.1-terra");
         assert.deepEqual(body.reasoning, { effort: "medium" });
         assert.deepEqual(body.text.format.schema, args.schema);
         assert.equal(body.instructions, args.instructions);
         return Response.json({
           id: "resp_test",
           status: "completed",
-          model: "gpt-6-astra",
-          service_tier: "ultrafast",
+          model: "gpt-6.1-terra",
+          service_tier: "default",
           output_text: '{"ok":true}',
         });
       }) as typeof fetch,
     });
     assert.deepEqual(await generate(args), { ok: true });
-    assert.equal(steps[0]!.serviceTier, "ultrafast");
+    assert.equal(steps[0]!.serviceTier, "default");
+  });
+  it("refuses a paid request when its budget cannot be reserved", async () => {
+    let calls = 0,
+      saves = 0;
+    const generate = createBackgroundGenerator({
+      apiKey: "test",
+      steps: [],
+      save: async () => {
+        saves++;
+      },
+      beforeSubmit: async ({ step, maximumCostUsd }) => {
+        assert.equal(step, 0);
+        assert.ok(maximumCostUsd > 0 && maximumCostUsd < 0.12);
+        throw new AiProviderError("spend-limit");
+      },
+      transport: (async () => {
+        calls++;
+        return response("completed", '{"ok":true}');
+      }) as typeof fetch,
+    });
+    await assert.rejects(generate(args), /Kostnadsgrensen/);
+    assert.equal(calls, 0);
+    assert.equal(saves, 0);
+  });
+  it("caps output and rejects oversized inputs before a paid call", async () => {
+    let calls = 0;
+    const generate = createBackgroundGenerator({
+      apiKey: "test",
+      steps: [],
+      maxOutputTokens: 1000000,
+      save: async () => {},
+      transport: (async (_url, init) => {
+        calls++;
+        assert.equal(JSON.parse(String(init?.body)).max_output_tokens, 22000);
+        return response("completed", '{"ok":true}');
+      }) as typeof fetch,
+    });
+    await assert.rejects(generate({ ...args, input: "x".repeat(160001) }), /Kostnadsgrensen/);
+    assert.equal(calls, 0);
+    const bounded = createBackgroundGenerator({
+      apiKey: "test",
+      steps: [],
+      maxOutputTokens: 1000000,
+      save: async () => {},
+      transport: (async (_u, init) => {
+        assert.equal(JSON.parse(String(init?.body)).max_output_tokens, 22000);
+        return response("completed", '{"ok":true}');
+      }) as typeof fetch,
+    });
+    await bounded(args);
+  });
+  it("allows at most two purchases for a generation and never reserves for polling", async () => {
+    let reserves = 0;
+    const hash = await digest(args);
+    const generate = createBackgroundGenerator({
+      apiKey: "test",
+      steps: [
+        { hash, output: { ok: true } },
+        { hash, output: { ok: true } },
+      ],
+      maxSteps: 2,
+      save: async () => {},
+      beforeSubmit: async () => {
+        reserves++;
+      },
+    });
+    await generate(args);
+    await generate(args);
+    await assert.rejects(generate(args), /Kostnadsgrensen/);
+    const poll = createBackgroundGenerator({
+      apiKey: "test",
+      steps: [{ hash, responseId: "resp_test" }],
+      save: async () => {},
+      beforeSubmit: async () => {
+        reserves++;
+      },
+      transport: (async () => response("completed", '{"ok":true}')) as typeof fetch,
+    });
+    await poll(args);
+    assert.equal(reserves, 0);
   });
   it("limits each Edge invocation to one provider request even for immediate completions", async () => {
     let calls = 0;
@@ -84,7 +193,7 @@ describe("Resumable Astra responses", () => {
         assert.equal(saves, 1);
         assert.equal(String(url), "https://api.openai.com/v1/responses");
         const body = JSON.parse(String(init?.body));
-        assert.equal(body.model, "gpt-6-astra");
+        assert.equal(body.model, "gpt-6.1-terra");
         assert.equal(body.background, true);
         assert.equal(body.store, false);
         assert.equal(body.text.format.strict, true);
