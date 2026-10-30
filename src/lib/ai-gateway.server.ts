@@ -1,4 +1,5 @@
 // Server-only OpenAI Responses client. Never return provider error bodies to the client.
+import { CASE_MODEL, CASE_SERVICE_TIER, requestBudget } from "./ai-policy.server";
 type JsonSchema = Record<string, unknown>;
 export class AiProviderError extends Error {
   constructor(
@@ -8,20 +9,26 @@ export class AiProviderError extends Error {
       | "rate-limited"
       | "authentication"
       | "timeout"
+      | "spend-limit"
+      | "output-limit"
       | "unavailable",
   ) {
     super(
-      code === "credits-exhausted"
-        ? "OpenAI-kontoen som casetjenesten bruker, mangler kreditt. Administrator må kontrollere saldoen hos OpenAI."
-        : code === "usage-limited"
-          ? "OpenAI-kontoens saldo eller forbruksgrense stopper forespørselen. Administrator må kontrollere OpenAI-kontoen som API-nøkkelen tilhører."
-          : code === "rate-limited"
-            ? "For mange forespørsler akkurat nå. Prøv igjen om litt."
-            : code === "authentication"
-              ? "Casetjenestens OpenAI-tilkobling må kontrolleres av administrator."
-              : code === "timeout"
-                ? "Casetjenesten brukte for lang tid. Prøv igjen."
-                : "Casetjenesten fullførte ikke svaret. Prøv igjen.",
+      code === "output-limit"
+        ? "Svaret nådde tekstgrensen og kunne ikke fullføres. Ingen automatisk ny bestilling er startet. Lagrede caser er fortsatt tilgjengelige."
+        : code === "spend-limit"
+          ? "Kostnadsgrensen stoppet forespørselen før et nytt KI-kall. Ingen ny case er bestilt. Lagrede caser er fortsatt tilgjengelige."
+          : code === "credits-exhausted"
+            ? "OpenAI-kontoen som casetjenesten bruker, mangler kreditt. Administrator må kontrollere saldoen hos OpenAI."
+            : code === "usage-limited"
+              ? "OpenAI-kontoens saldo eller forbruksgrense stopper forespørselen. Administrator må kontrollere OpenAI-kontoen som API-nøkkelen tilhører."
+              : code === "rate-limited"
+                ? "For mange forespørsler akkurat nå. Prøv igjen om litt."
+                : code === "authentication"
+                  ? "Casetjenestens OpenAI-tilkobling må kontrolleres av administrator."
+                  : code === "timeout"
+                    ? "Casetjenesten brukte for lang tid. Prøv igjen."
+                    : "Casetjenesten fullførte ikke svaret. Prøv igjen.",
     );
     this.name = "AiProviderError";
   }
@@ -219,6 +226,8 @@ export async function generateJson({
 }): Promise<unknown> {
   const apiKey = process.env["OPENAI_API_KEY"]?.trim();
   if (!apiKey) throw new AiProviderError("authentication");
+  const budget = requestBudget({ instructions, input, schema }, 22000);
+  if (!budget) throw new AiProviderError("spend-limit");
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -229,13 +238,18 @@ export async function generateJson({
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-6-astra",
+        model: CASE_MODEL,
+        service_tier: CASE_SERVICE_TIER,
+        max_output_tokens: budget.maxOutputTokens,
         store: false,
         instructions,
         input,
         stream: true,
         reasoning: { effort },
-        text: { format: { type: "json_schema", name: schemaName, strict: true, schema } },
+        text: {
+          verbosity: schemaName === "case_draft_v3" ? "low" : "medium",
+          format: { type: "json_schema", name: schemaName, strict: true, schema },
+        },
       }),
     });
     if (!response.ok || !response.body) throw await providerErrorFromResponse(response);

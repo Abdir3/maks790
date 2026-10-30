@@ -269,6 +269,9 @@ function Index() {
       onOpen={() => {
         if (backgroundJob.definition) openCase(backgroundJob.definition);
       }}
+      {...(backgroundJob.status === "failed" && saved[0]
+        ? { onOpenSaved: () => openCase(saved[0]!.definition) }
+        : {})}
       onDismiss={() => setDismissedJobId(backgroundJob.id)}
     />
   ) : null;

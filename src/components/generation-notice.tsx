@@ -6,11 +6,13 @@ export function GenerationNotice({
   job,
   onReview,
   onOpen,
+  onOpenSaved,
   onDismiss,
 }: {
   job: GenerationJob;
   onReview: () => void;
   onOpen: () => void;
+  onOpenSaved?: () => void;
   onDismiss?: () => void;
 }) {
   const pending = job.status === "pending";
@@ -56,14 +58,25 @@ export function GenerationNotice({
           </Button>
         )}
       </div>
-      <Button
-        className="mt-3"
-        size="sm"
-        variant={completed ? "default" : "outline"}
-        onClick={completed ? onOpen : onReview}
-      >
-        {pending ? "Se fremdrift" : completed ? "Åpne casen" : "Se valg for ny case"}
-      </Button>
+      {!pending && !completed && onOpenSaved && (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Du har allerede en ferdig case i biblioteket. Den kan åpnes uten ny generering.
+        </p>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {!pending && !completed && onOpenSaved && (
+          <Button size="sm" onClick={onOpenSaved}>
+            Åpne siste lagrede case
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant={completed ? "default" : "outline"}
+          onClick={completed ? onOpen : onReview}
+        >
+          {pending ? "Se fremdrift" : completed ? "Åpne casen" : "Se valg for ny case"}
+        </Button>
+      </div>
     </section>
   );
 }

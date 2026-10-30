@@ -53,7 +53,7 @@ describe("Direct OpenAI billing and authentication", () => {
       assert.equal(headers.has("Lovable-API-Key"), false);
       assert.equal(headers.has("X-Lovable-AIG-SDK"), false);
       const body = JSON.parse(String(init?.body));
-      assert.equal(body.model, "gpt-6-astra");
+      assert.equal(body.model, "gpt-6.1-terra");
       assert.equal(body.store, false);
       assert.equal(body.stream, true);
       assert.deepEqual(body.reasoning, { effort: "medium" });
@@ -67,7 +67,7 @@ describe("Direct OpenAI billing and authentication", () => {
         type: "response.completed",
         response: {
           id: "resp-test",
-          model: "gpt-6-astra",
+          model: "gpt-6.1-terra",
           status: "completed",
           output: [{ content: [{ type: "output_text", text: '{"ok":true}' }] }],
           usage: { input_tokens: 12, output_tokens: 5 },
@@ -84,7 +84,7 @@ describe("Direct OpenAI billing and authentication", () => {
     );
     assert.equal(calls, 1);
     assert.deepEqual(metadata, [
-      { id: "resp-test", model: "gpt-6-astra", inputTokens: 12, outputTokens: 5 },
+      { id: "resp-test", model: "gpt-6.1-terra", inputTokens: 12, outputTokens: 5 },
     ]);
   });
 

@@ -25,7 +25,7 @@ npm run dev
 The browser calls the `case-api` Supabase Edge Function with the signed-in user's
 JWT. That function validates the session and ownership before reading private
 assessments or making paid calls. Generation, feedback and model answers use
-`gpt-6-astra`; dictation uses `gpt-transcribe`. Usage is billed to the OpenAI
+`gpt-6.1-terra`; dictation uses `gpt-transcribe`. Usage is billed to the OpenAI
 project that issued `OPENAI_API_KEY`.
 
 `OPENAI_API_KEY` belongs in **Supabase project secrets**. No AI key or privileged
@@ -33,7 +33,7 @@ database key is required in Lovable. Keep credentials out of Git, browser
 variables (`VITE_*`) and logs. The committed `.env` contains public Supabase
 connection settings used by the published frontend.
 
-Long Astra calls use OpenAI background responses with `store: false`. Supabase
+Long model calls use OpenAI background responses with `store: false`. Supabase
 stores private checkpoints and leases each job to one worker at a time. A database
 trigger starts work immediately; a five-second server schedule resumes it even
 when every browser is closed. Browser status requests only observe generation;
@@ -41,17 +41,32 @@ private drafts and rubrics
 remain on the backend. OpenAI temporarily retains background responses for
 polling, as described in its [background-mode documentation](https://developers.openai.com/api/docs/guides/background).
 
-Interactive case generation uses one Astra draft at medium reasoning effort.
-Generation uses the `ultrafast` processing tier by default, configurable through
-the server-only `OPENAI_GENERATION_TIER` secret (`default`, `fast`, `ultrafast`).
-This changes processing speed and price, not the model or reasoning setting.
-Ultrafast has higher token prices; see [OpenAI pricing](https://developers.openai.com/api/docs/pricing).
-Feedback and model answers use the default tier.
+Interactive case generation uses one Terra draft at medium reasoning effort.
+All text AI requests explicitly use standard (`default`) processing. There is no
+Astra fallback or premium-tier environment override. Model and price policy are
+centralised in `src/lib/ai-policy.server.ts`.
 The original clinical prompt, curriculum coverage and private assessment are
 preserved. Fast local checks validate structure, clinical data, calculated blood
 gases, timelines, sources and similarity; a concrete failure allows one repair.
 The independent solution and AI review run only in the offline calibration tool.
 Feedback and model answers retain their separate review when requested.
+
+Before each new provider purchase, a private atomic reservation must fit within
+**$0.50 per job, $1 per account per rolling 24 hours and $2 across the application
+per rolling 24 hours**. Reservations conservatively cover bounded input, schema,
+cache-write pricing and the full output/reasoning token allowance. They remain
+counted even after failures or deletion, and are not an invoice of actual usage.
+Concurrent requests cannot race past these limits. Generation allows at most two
+paid calls (draft plus one repair), with 18,000 output tokens for short cases and
+22,000 for long cases. Feedback/model answers allow at most four calls within the
+same dollar caps. Unknown submission outcomes never buy an automatic replacement.
+These limits cover case generation/feedback/model answers, not dictation or API
+requests made outside this application. Prices require review if OpenAI changes
+them: [Terra pricing](https://developers.openai.com/api/docs/models/gpt-6.1-terra).
+
+Offline calibration now requires explicit `--budget-usd` of at most `0.50` per
+run. It uses Terra with the same input/output limits; no paid benchmark batch is
+started by default. Routine verification uses mocked providers and local SQL.
 
 The generation screen shows provider-backed milestones, an animated case preview
 and elapsed time. It does not invent a completion percentage. Only a public phase
@@ -62,6 +77,8 @@ to the same account. The library recovers the job and its finished case from
 Supabase. Timing targets are 150 seconds for short cases and 180 for long cases;
 provider delays can exceed these targets. Late work continues with honest delay
 messaging instead of publishing an invalid case or starting a duplicate request.
+When a new attempt fails, the interface offers the last saved case belonging to
+the current account without making another model call.
 
 To update the backend, apply the tracked Supabase migrations, then run:
 
