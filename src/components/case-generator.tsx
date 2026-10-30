@@ -152,7 +152,7 @@ export function CaseGenerator({
             >
               <p className="font-medium">
                 {format === "quick"
-                  ? "Én kortcase med 2–4 spørsmål"
+                  ? "Én kortcase med 2–3 spørsmål"
                   : `${stages} deler med åpne oppgaver`}
               </p>
               <dl className="mt-3 grid gap-2 text-sm">

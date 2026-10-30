@@ -1,6 +1,7 @@
 # Pensumgrunnlag og klinisk variasjon
 
-Versjon: `exam-info-2026-10-28-v3`.
+Kandidatversjon: `exam-info-2026-10-29-v4`. Testomfang og utrullingsstatus
+står i [verifikasjonsrapporten](case-generator-verification.md).
 
 Studieheftet er utgangspunktet for læringsutbytte og undervisningsbredde.
 Arbeidskrav 1 og 2 behandles som tidligere eksamenseksempler etter brukerens
@@ -10,7 +11,7 @@ viser blant annet vurdering før ankomst, utskrivelse, funksjon, legemidler
 og ny sykdomsutvikling. Selvskadematerialet viser relasjon, kommunikasjon
 og vurdering av suicidalitet.
 
-Den nåværende katalogen har 52 kliniske scenarioer, 14 faglige temaer og
+Den nåværende katalogen har 53 kliniske scenarioer, 14 faglige temaer og
 ett valgbart blodgasstema som bruker de samme kliniske scenarioene.
 Hvert scenario har to sammenhengende vurderingsmål. Dette er et utvalg
 for øving, ikke en påstand om full dekning av alt pensum.
@@ -25,7 +26,7 @@ Den konkrete koblingen til funn, data og kilder finnes i
 | Tema                     | Primært pensumgrunnlag                         | Eksempler i katalogen                                                                    | Hva studenten vurderer                                                                      |
 | ------------------------ | ---------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | Sirkulasjon/respirasjon  | Studieplan, kompendium 118–175 og 176–185      | Koronarsykdom, hjertesvikt, emboli, kols, astma, synkope                                 | Sammenhengen mellom symptomer, tolket EKG, laboratoriedynamikk, oksygenering og ventilasjon |
-| Infeksjon/sjokk          | Studieplan, 118–175, 344–347                   | Lunge-/urinveisfokus ved sepsis, hypovolemisk sjokk                                      | Fokus, organsvikt, perfusjon, respons og prioritering                                       |
+| Infeksjon/sjokk          | Studieplan, 118–175, 344–347                   | Lunge-/urinveisfokus ved sepsis, hypovolemisk sjokk, anafylaksi hos voksne               | Fokus/utløser, organsvikt, perfusjon, respons og prioritering                               |
 | Barn                     | Arbeidskrav 1, 99–117                          | Bronkiolitt, laryngitt, dehydrering, prioritering av flere barn                          | Alder, foreldrenes observasjoner, kontakt, pust og hydrering                                |
 | Geriatri                 | Randi, 176–189                                 | Delirium, akutt nyreskade, retensjon, hoftebrudd                                         | Endring fra baseline, flere samtidige årsaker, legemidler og trygg overgang                 |
 | Traume/nevrologi         | Studieplan/NIHSS, 208–212, 344–347             | Slag, hodeskade, blødningssjokk                                                          | Debut/mekanisme, nevrologi, blødning, kliniske prioriteringer og overlevering               |
@@ -51,7 +52,9 @@ Alle opplysninger nødvendige for oppgaven skal finnes i casen: relevant
 sykehistorie, funksjon, medisiner, funn, vitalia og prøvesvar. Studenten
 skal ikke måtte be en chatbot om det avgjørende prøvesvaret. Fullstendighet
 betyr at oppgaven er besvarbar, ikke at alle pasienter får alle undersøkelser.
-For barn angis konkret alder i måneder/døgn når hele år er utilstrekkelig.
+For barn angis konkret alder i fullførte måneder, dager eller timer når
+hele år er utilstrekkelig. Avrunding skal ikke flytte barnet over en
+aldersgrense som brukes av referanseinformasjonen.
 
 Medikamenthistorikk beholder doser, enheter, administrasjonsmåte,
 hyppighet, siste inntak og endringer. Historie og allerede gjennomført
@@ -59,8 +62,19 @@ behandling skilles fra nye anbefalinger. Resultater, tiltak og respons
 tidfestes eksplisitt. Senere prøver kan vises i en komplett tidslinje,
 men er ikke bevis for hva som var kjent på et tidligere tidspunkt.
 
+Analysetype og tidspunkt må være tydelige når de påvirker tolkningen:
+blodketoner og urinstiks er forskjellige målinger, og en tidlig heterofil
+hurtigtest er ikke det samme som EBV-spesifikk serologi. Respons på
+hypoglykemibehandling skal vise om glukosetilførselen fortsatt pågår.
+Kontrollprøver skilles fra tilgjengelige svar og er ikke automatisk et
+vilkår for å prioritere en akutt situasjon.
+
 Kortformatet trener et avgrenset klinisk problem med diagnostisk
-resonnement og relevante prioriteringer. Langformatet integrerer flere
+resonnement og relevante prioriteringer. Målet er normalt 150–250 ord
+kasustekst pluss nødvendige data, med normalt to og høyst tre fokuserte
+spørsmål. Mange store delkrav i samme spørsmål gjør ikke casen kort.
+10–15 minutter er et øvingsmål som ennå ikke er målt hos studenter.
+Langformatet integrerer flere
 beslektede kliniske og menneskelige hensyn. En komplett case kan fortsatt
 ha flere forsvarlige tolkninger eller handlingsalternativer. Det skal ikke
 skapes kunstig usikkerhet ved å skjule nødvendige opplysninger.
@@ -70,6 +84,18 @@ beskrevet akutt pasientforløp og tidfestede premortale målinger før
 pårørendearbeidet. Samtaledeler etter bekreftet død skal ikke få oppdiktede
 nye pasientvitalia. Det samme relevansprinsippet gjelder andre senere deler:
 komplette nødvendige data innebærer ikke en ny full måleserie i hver del.
+
+Prioritering av flere barn finnes også bare i langformatet. Første del
+beskriver tre–fire navngitte barn på like vilkår, med kjent og ukjent
+informasjon ved første kontakt. Den har ikke et enkeltbarns overskrift
+eller egne tabeller som røper hvem studenten skal prioritere. Senere
+følger casen ett tydelig navngitt barn med relevante målinger og nye
+opplysninger. Hovedpasientens alder gjelder disse strukturerte dataene;
+de andre barnas opplysninger holdes adskilt i teksten. Oppgavene omfatter
+betinget prioritering, retriage og foreldrenes observasjoner. Oppsettet
+gir ikke fasit om at barnet som følges videre nødvendigvis kom først.
+Fullstendighet vurderes ved beslutningstidspunktet; den innledende
+triagesituasjonen skal ikke fremstilles som en allerede fullført utredning.
 
 ## Variasjon og kompatibilitet
 
@@ -130,6 +156,46 @@ Helsedirektoratets anbefalinger, OUS' metodebøker, sykehuslaboratorier,
 Giftinformasjonen og Felleskatalogens preparatomtaler. Britiske NICE-kilder
 merkes med populasjon og setting. En kontrollert lenke betyr ikke at hver
 anbefaling på nettsiden ble oppdatert samme dag.
+
+V4 utvider registeret med avgrensede kilder kontrollert 29.–30. oktober
+2026, blant annet anafylaksi, hjertesvikt, laryngitt/bronkiolitt,
+dehydrering hos barn, HHS, binyrebarkkrise, hypoglykemi, hyperkalemi,
+hodeskade, alkoholisk ketoacidose, toksiske alkoholer og QT-relaterte
+kontraindikasjoner. Kildepostene angir hvilke avsnitt som faktisk ble lest,
+publiseringsdato der den var tilgjengelig, og om teksten ble lest direkte
+eller fra indeksert primærkildetekst. Det er ikke en full ny gjennomgang
+av hele retningslinjen. Kildene gir ikke automatisk støtte for alle doser
+eller alle kliniske situasjoner på nettsiden.
+
+Gjennomgangen omfatter også voksen astma, hyponatremi, delirium,
+GI-blødning, postoperativ analgesi, preparatspesifikk opioidrisiko,
+LAR og akutt smerte, tolketjenester, etterlatte og aktuelle ØNH-kilder.
+Palliativ smertevurdering skiller tilgjengelig utredning fra undersøkelser
+som først planlegges. Morfin ved nyresvikt vurderes i klinisk sammenheng,
+og Instanyls preparatspesifikke vilkår gir grunnlag for å kontrollere et
+konkret forslag uten å kreve dette preparatet i enhver besvarelse.
+Febril nøytropeni har et eget aktuelt kildegrunnlag for hastegrad og
+risikovurdering; tidlig håndtering skal ikke avhenge av ferdige dyrkningssvar.
+NICE gir avgrenset støtte for mistanke og akutt vurdering også når feber
+mangler. Britiske antibiotikaregimer overføres ikke til norsk behandling.
+Hypoglykemi skiller risiko ved terapeutisk glimepiridbruk fra
+forgiftningsregimer. Kalsiumtolkning tar hensyn til at albuminkorreksjon
+ikke automatisk er mer pålitelig enn totalkalsium. Oppgavens analyse,
+referanse og eventuell regnekonvensjon må være tydelig; ingen universell
+korreksjonsformel blir en skjult fasit.
+
+Medullakompresjon har avgrenset støtte fra
+[NICE NG234](https://www.nice.org.uk/guidance/ng234/chapter/recommendations)
+for individuelt tilpasset leie og stabilitetsvurdering.
+[Enzalutamids interaksjonsgrunnlag](https://www.felleskatalogen.no/medisin/xtandi-astellas-584804)
+støtter konkret legemiddelgjennomgang når preparatet brukes, uten å gjøre
+en bestemt doseendring eller interaksjon til et krav i alle kreftcaser.
+
+Nye kilde-ID-er lar lagrede V3-caser beholde sitt opprinnelige kildeomfang.
+Eksisterende ID-er er ikke gitt nye behandlingsregimer. V3 og V4 kan derfor
+leses av vurderingskjeden, mens ukjente versjoner avvises. Denne
+kompatibiliteten er teknisk kontrollert; den er ikke en ny klinisk
+godkjenning av alle eldre caser.
 
 Scenarioet om akutt nyreskade har også
 [OUS' nyreskadekapittel](https://metodebok.no/index.php?action=topic&item=YwXG8gK3)

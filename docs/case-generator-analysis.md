@@ -2,6 +2,13 @@
 
 Revidert 28. oktober 2026 etter ny kildegjennomgang og tre utvekslinger med Claude Desktop. Utgangspunkt: `57703f8` i `Abdir3/maks790`.
 
+Kvalitetsgjennomgangen 29.–30. oktober viderefører denne kildeanalysen og
+innskrenker kortformatets omfang. Den sammenligner faktiske Astra-caser,
+tilbakemeldinger og eldre eksempler i en egen
+[Claude-samtale](https://claude.ai/chat/60ac3996-4d9a-491d-9633-b1566055a76e).
+Se [verifikasjonsrapporten](case-generator-verification.md) for forskjellen
+mellom publisert baseline, lokal kandidat og kontroller som ennå ikke er kjørt.
+
 ## Kildenes status
 
 Brukeren har bekreftet at Arbeidskrav 1, Arbeidskrav 2 og de fotograferte Hilde-oppgavene skal brukes som tidligere eksamenseksempler. Dokumentenes trykte etiketter beholdes som kildeopplysninger; studentbesvarelsene er ikke sensorveiledninger.
@@ -40,8 +47,9 @@ Hilde viser at en akutt situasjon også kan kreve vurdering av selvskade, somati
 
 ## Avtalt produkt og implementering
 
-- Kortcase: komplett klinisk situasjon, normalt 150–300 ord pluss data, 2–4 spørsmål om sannsynlig diagnose/funntolkning og begrunnet klinisk konsekvens. Vanlige diagnoser som ACS, sepsis, lungeemboli, hjerneslag, anafylaksi og DKA er sentrale, ikke forbudte.
+- Kortcase: komplett klinisk situasjon, normalt 150–250 ord pluss nødvendige data. Kvalitetsgjennomgangen 29. oktober avgrenset dette til normalt to spørsmål, høyst tre: samlet diagnose/funntolkning og én viktig klinisk beslutning. Flere store delkrav skal ikke skjules i ett spørsmål. 10–15 minutter er et øvingsmål, ikke en målt garanti; spørsmålsomfang og gjentakelser reduseres før nødvendige data kuttes. Vanlige diagnoser som ACS, sepsis, lungeemboli, hjerneslag, anafylaksi og DKA er sentrale, ikke forbudte.
 - Langcase: én bred sammenhengende situasjon med 3–6 deler, standard fire. Hele casen og alle spørsmål er tilgjengelige med en gang. Ingen skjulte avgjørende undersøkelser eller chatbot-utspørring.
+- Barnetriage: flere barn presenteres på like vilkår før senere opplysninger følger ett navngitt barn. Manglende målinger ved første kontakt kan være en del av prioriteringsoppgaven; det skal være tydelig hva som er kjent ved hvert tidspunkt. Denne sammenligningen med retriage og foreldresamtale er et langformat.
 - Data: relevant sykehistorie, allergier, legemiddelnavn/doser/tid, undersøkelse, komplette relevante vitalia, laboratorieverdier og undersøkelsesrapporter med enheter, referanseinformasjon og tidspunkt.
 - Blodgass: studenten tolker. Faktisk bikarbonat og standard BE(Ecf) beregnes fra pH/pCO₂ i kode med dokumenterte ligninger; de blandes ikke med standard bikarbonat eller BE(B). Prøvetype, oksygentilførsel og tidspunkt følger målingen. Lokale referanseintervaller og begrensninger vises. Blandingsforstyrrelser er tillatt.
 - EKG: ferdig tolket rapport med klinisk konklusjon. Oppgavene trener betydning og handling, ikke avlesning av kurver.

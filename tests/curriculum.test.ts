@@ -51,6 +51,7 @@ describe("Source-grounded curriculum", () => {
       assert.ok(topics.has(id), id);
     for (const family of [
       "diabetisk-ketoacidose",
+      "anafylaksi",
       "hyperosmolart-hyperglykemisk-syndrom",
       "binyrebarkkrise",
       "hyponatremi",
@@ -83,7 +84,7 @@ describe("Source-grounded curriculum", () => {
       for (const id of b.sourceIds) assert.ok(ids.has(id), b.id + ": " + id);
       assert.ok(b.sourceIds.some((id) => !pedagogical.has(id)));
     }
-    assert.ok(SOURCE_VERSION.endsWith("v3"));
+    assert.match(SOURCE_VERSION, /^exam-info-\d{4}-\d{2}-\d{2}-v[1-9]\d*$/);
     assert.match(sourceContext(["fluid-balance"]), /ORIGINALEN/);
     assert.match(sourceContext(["assignment-2"]), /tvetydig/);
   });
@@ -132,6 +133,16 @@ describe("Source-grounded curriculum", () => {
       d.requiredData.some((s) => s.includes("premortale") && s.includes("måletidspunkter")),
     );
     assert.ok(d.holisticFocus.some((s) => s.includes("ikke konstruer nye pasientvitalia")));
+    assert.match(d.decision, /kommunisere/);
+    assert.match(d.trajectory, /bekreftet uventet dødsfall/);
+    assert.ok(d.sourceIds.includes("bereaved-children-current"));
+    const interpreted = drawVariety(
+      [],
+      { ...options, blueprintId: "interpreted-consultation", format: "quick" },
+      () => 0,
+    );
+    assert.match(interpreted.decision, /kommunisere/);
+    assert.ok(interpreted.sourceIds.includes("interpreter-current"));
     for (const format of ["quick", "long"] as const)
       for (const topic of TOPICS)
         for (const setting of START_SETTINGS) {
@@ -150,6 +161,16 @@ describe("Source-grounded curriculum", () => {
             );
           }
         }
+  });
+  it("reserves comparison and reassessment of several children for the long format", () => {
+    assert.throws(() =>
+      drawVariety([], { ...options, blueprintId: "child-triage", format: "quick" }),
+    );
+    const d = drawVariety([], { ...options, blueprintId: "child-triage", format: "long" }, () => 0);
+    assert.equal(d.topicId, "pediatrics");
+    assert.equal(d.maxAge, 15);
+    assert.match(d.decision, /prioritere/);
+    assert.ok(d.holisticFocus.some((item) => item.includes("ventende barn")));
   });
 });
 

@@ -13,6 +13,7 @@ const statusLabels = {
 };
 
 function Sources({ ids, sources }: { ids: string[]; sources: SourceLink[] }) {
+  if (!ids.some((id) => sources.some((source) => source.id === id))) return null;
   return (
     <details>
       <summary>Kildegrunnlag</summary>
@@ -181,12 +182,16 @@ export function CaseFeedbackPanel({
                   <li key={i}>{text}</li>
                 ))}
               </ul>
-              <h4>Alternative vurderinger</h4>
-              <ul>
-                {item.alternatives.map((text, i) => (
-                  <li key={i}>{text}</li>
-                ))}
-              </ul>
+              {item.alternatives.length > 0 && (
+                <div>
+                  <h4>Alternative vurderinger</h4>
+                  <ul>
+                    {item.alternatives.map((text, i) => (
+                      <li key={i}>{text}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <Sources ids={item.sourceIds} sources={solution.sources} />
               <Button
                 variant="outline"

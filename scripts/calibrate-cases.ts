@@ -1,15 +1,28 @@
 import { mkdir, writeFile, readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { z } from "zod";
-import { drawVariety, TOPICS, type HistoryEntry } from "../src/lib/case-variety";
+import {
+  CLINICAL_BLUEPRINTS,
+  drawVariety,
+  TOPICS,
+  type CaseFormat,
+  type HistoryEntry,
+} from "../src/lib/case-variety";
 import { generateValidatedCase, type JsonGenerator } from "../src/lib/case-generation.server";
 import {
   generateFeedback,
   generateModelAnswer,
   assessmentContext,
 } from "../src/lib/case-feedback.server";
-import { generateJson, readResponseJson } from "../src/lib/ai-gateway.server";
+import {
+  generateJson,
+  readResponseJson,
+  AiProviderError,
+  providerErrorFromResponse,
+  type ResponseMetadata,
+} from "../src/lib/ai-gateway.server";
 import { allQuestions, type CaseDefinition } from "../src/lib/case-model";
 import { SOURCE_VERSION } from "../src/lib/case-sources.server";
 
@@ -87,6 +100,36 @@ export const CALIBRATION_SPECS = [
   },
 ] as const;
 
+export type CalibrationSuite = "core" | "catalog";
+// Deliberately include integrated long cases outside the original 11-case sample.
+const LONG_CATALOG_CASES = new Set([
+  "heart-failure",
+  "child-triage",
+  "geriatric-delirium",
+  "occult-hip-fracture",
+  "hemorrhagic-trauma",
+  "self-harm",
+  "lar-pain",
+  "palliative-decline",
+  "sudden-death",
+  "violence",
+  "interpreted-consultation",
+  "cord-compression",
+  "neutropenic-infection",
+  "postop-lung",
+]);
+export const CATALOG_SPECS = CLINICAL_BLUEPRINTS.map((blueprint) => {
+  const format: CaseFormat =
+    !blueprint.formats.includes("quick") || LONG_CATALOG_CASES.has(blueprint.id) ? "long" : "quick";
+  return {
+    id: `catalog-${blueprint.id}`,
+    topic: blueprint.topicId,
+    blueprintId: blueprint.id,
+    format,
+    stages: format === "quick" ? 1 : 4,
+  };
+});
+
 function seededRandom(seed: number) {
   let value = seed >>> 0;
   return () => {
@@ -95,10 +138,10 @@ function seededRandom(seed: number) {
   };
 }
 
-export function calibrationPlan(seed = 790) {
+export function calibrationPlan(seed = 790, suite: CalibrationSuite = "core") {
   const random = seededRandom(seed);
   const history: HistoryEntry[] = [];
-  const plan = CALIBRATION_SPECS.map((spec) => {
+  const plan = (suite === "catalog" ? CATALOG_SPECS : CALIBRATION_SPECS).map((spec) => {
     if (!TOPICS.some((topic) => topic.id === spec.topic))
       throw new Error(`Ukjent kalibreringstema: ${spec.topic}`);
     const draw = drawVariety(
@@ -194,7 +237,13 @@ const profileSchema = {
 type RunRecord = {
   id: string;
   blueprintId: string;
-  status: "generation-complete" | "automated-checks-complete" | "needs-review" | "failed";
+  status:
+    | "generation-complete"
+    | "automated-checks-complete"
+    | "needs-review"
+    | "failed"
+    | "provider-error"
+    | "not-run";
   modelCalls: number;
   durationSeconds: number;
   observations: string[];
@@ -219,27 +268,33 @@ async function loadJson(path: string): Promise<unknown | undefined> {
 export const generateOpenAiJson: JsonGenerator = async (args) => {
   const apiKey = process.env["OPENAI_API_KEY"];
   if (!apiKey) throw new Error("OPENAI_API_KEY mangler; ingen direkte OpenAI-test er kjørt.");
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    signal: AbortSignal.timeout(240000),
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: "gpt-6-astra",
-      store: false,
-      stream: true,
-      instructions: args.instructions,
-      input: [{ role: "user", content: args.input }],
-      reasoning: { effort: args.effort ?? "medium" },
-      text: {
-        format: { type: "json_schema", name: args.schemaName, strict: true, schema: args.schema },
-      },
-    }),
-  });
-  if (!response.ok || !response.body)
-    throw new Error(
-      `OpenAI-testforespørselen feilet (HTTP ${response.status}). Ingen produksjonstest av Lovable er utført.`,
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      signal: AbortSignal.timeout(240000),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "gpt-6-astra",
+        store: false,
+        stream: true,
+        instructions: args.instructions,
+        input: [{ role: "user", content: args.input }],
+        reasoning: { effort: args.effort ?? "medium" },
+        text: {
+          format: { type: "json_schema", name: args.schemaName, strict: true, schema: args.schema },
+        },
+      }),
+    });
+  } catch (error) {
+    throw new AiProviderError(
+      error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
+        ? "timeout"
+        : "unavailable",
     );
-  return readResponseJson(response.body);
+  }
+  if (!response.ok || !response.body) throw await providerErrorFromResponse(response);
+  return readResponseJson(response.body, args.onResponse);
 };
 
 export async function runCalibration(options: {
@@ -249,14 +304,40 @@ export async function runCalibration(options: {
   provider?: "lovable" | "openai";
   phase?: "generate" | "feedback" | "all";
   resume?: string;
+  suite?: CalibrationSuite;
   generate?: JsonGenerator;
 }) {
-  const plan = calibrationPlan(options.seed).filter(
+  const suite = options.suite ?? "core";
+  const plan = calibrationPlan(options.seed, suite).filter(
     (item) => !options.only || item.id === options.only,
   );
   if (!plan.length) throw new Error("Det valgte kalibreringseksempelet finnes ikke.");
   const provider = options.provider ?? "lovable";
   const phase = options.phase ?? "generate";
+  const executionMode = options.generate ? "injected-test" : "live";
+  // A source label alone cannot detect prompt or orchestration edits between
+  // phases. Keep resumed evidence tied to the exact implementation that ran.
+  const implementationFiles = [
+    "scripts/calibrate-cases.ts",
+    "src/lib/ai-gateway.server.ts",
+    "src/lib/blood-gas.ts",
+    "src/lib/case-contract.ts",
+    "src/lib/case-feedback.server.ts",
+    "src/lib/case-generation.server.ts",
+    "src/lib/case-model.ts",
+    "src/lib/case-prompt.server.ts",
+    "src/lib/case-quality.ts",
+    "src/lib/case-sources.server.ts",
+    "src/lib/case-variety.ts",
+    "src/lib/generated-case.ts",
+  ];
+  const implementationHash = createHash("sha256");
+  for (const path of implementationFiles) {
+    implementationHash.update(path + "\0");
+    implementationHash.update(await readFile(new URL("../" + path, import.meta.url)));
+    implementationHash.update("\0");
+  }
+  const implementationSha256 = implementationHash.digest("hex");
   const keyName = provider === "openai" ? "OPENAI_API_KEY" : "LOVABLE_API_KEY";
   if (!options.generate && !process.env[keyName])
     throw new Error(
@@ -269,39 +350,74 @@ export async function runCalibration(options: {
   const folder = options.resume
     ? resolve(options.resume)
     : resolve(options.out, `${runId}-seed-${options.seed}.local`);
-  await mkdir(folder, { recursive: true });
   const previousManifest = (await loadJson(resolve(folder, "manifest.json"))) as
-    { provider?: string; sourceVersion?: string; seed?: number } | undefined;
+    | {
+        provider?: string;
+        sourceVersion?: string;
+        seed?: number;
+        suite?: CalibrationSuite;
+        executionMode?: string;
+        implementationSha256?: string;
+        plan?: { id: string }[];
+      }
+    | undefined;
+  if (options.resume && !previousManifest)
+    throw new Error(
+      "Gjenopptakelsesmappe mangler manifest. Tidligere resultater kan ikke knyttes til denne koden; start en ny kjøring.",
+    );
   if (
     previousManifest &&
     (previousManifest.provider !== provider ||
       previousManifest.sourceVersion !== SOURCE_VERSION ||
-      previousManifest.seed !== options.seed)
+      previousManifest.implementationSha256 !== implementationSha256 ||
+      previousManifest.executionMode !== executionMode ||
+      (previousManifest.suite ?? "core") !== suite ||
+      previousManifest.seed !== options.seed ||
+      plan.some((item) => !previousManifest.plan?.some((original) => original.id === item.id)))
   )
     throw new Error(
-      "Tidligere kjøring har en annen leverandør eller kildeversjon. Start en ny kjøring.",
+      "Tidligere kjøring har annen kode, leverandør, kildeversjon, testmodus eller utvalgsplan. Start en ny kjøring.",
     );
-  if (!previousManifest)
+  if (!previousManifest) {
+    await mkdir(folder, { recursive: true });
     await saveJson(resolve(folder, "manifest.json"), {
       runId,
       seed: options.seed,
+      suite,
       sourceVersion: SOURCE_VERSION,
+      implementationSha256,
+      implementationFiles,
       plan,
       provider,
       productionGatewayVerified: false,
       gatewayVerification: "pending; use the completed phase report",
-      executionMode: options.generate ? "injected-test" : "live",
+      executionMode,
       evidenceLevel: "model-generated challenge profiles; not expert-labelled clinical gold",
       clinicalApproval: "requires independent expert review",
       databaseWrites: false,
     });
+  }
   const records: RunRecord[] = [];
   const recent: CaseDefinition[] = [];
   let gatewayResponses = 0;
+  let providerFailure: { code: AiProviderError["code"]; message: string } | undefined;
   const gateway = options.generate ?? (provider === "openai" ? generateOpenAiJson : generateJson);
   for (const item of plan) {
     const caseFolder = resolve(folder, item.id);
     await mkdir(caseFolder, { recursive: true });
+    if (providerFailure) {
+      const skipped: RunRecord = {
+        id: item.id,
+        blueprintId: item.draw.blueprintId,
+        status: "not-run",
+        modelCalls: 0,
+        durationSeconds: 0,
+        observations: ["Ikke kjørt etter leverandørfeil. Dette er ikke en klinisk avvisning."],
+      };
+      records.push(skipped);
+      await saveJson(resolve(caseFolder, `result-${runId}.json`), skipped);
+      continue;
+    }
     const started = Date.now();
     let calls = Math.max(
       0,
@@ -312,8 +428,16 @@ export async function runCalibration(options: {
       const stem = `${String(++calls).padStart(3, "0")}-${request.schemaName}`;
       console.log(`${item.id}: ${request.schemaName} (${calls})`);
       await saveJson(resolve(caseFolder, `${stem}-request.json`), request);
+      const callStarted = Date.now();
+      let metadata: ResponseMetadata | undefined;
       try {
-        const response = await gateway(request);
+        const response = await gateway({
+          ...request,
+          onResponse: (value) => {
+            metadata = value;
+            request.onResponse?.(value);
+          },
+        });
         gatewayResponses++;
         await saveJson(resolve(caseFolder, `${stem}-response.json`), response);
         return response;
@@ -322,6 +446,14 @@ export async function runCalibration(options: {
           error: error instanceof Error ? error.message : "Ukjent feil",
         });
         throw error;
+      } finally {
+        await saveJson(resolve(caseFolder, `${stem}-metadata.json`), {
+          requestedModel: provider === "openai" ? "gpt-6-astra" : "openai/gpt-6-astra",
+          durationSeconds: (Date.now() - callStarted) / 1000,
+          response: metadata ?? null,
+          provider,
+          executionMode: options.generate ? "injected-test" : "live",
+        });
       }
     };
     const record: RunRecord = {
@@ -418,9 +550,12 @@ export async function runCalibration(options: {
           const target = feedback.questions.find(
             (question) => question.questionId === profile.targetQuestionId,
           )!;
-          if (profile.kind === "unsafe" && !target.safety.length)
+          if (
+            profile.kind === "unsafe" &&
+            (target.status !== "needs-review" || !target.safety.length)
+          )
             record.observations.push(
-              "Den tiltenkt uforsvarlige testbesvarelsen fikk ingen konkret sikkerhetsmerknad på målspørsmålet. Krever manuell kontroll av både profilen og vurderingen.",
+              "Den tiltenkt uforsvarlige testbesvarelsen ble ikke både markert needs-review og gitt en sikkerhetsmerknad på målspørsmålet. Generelle eller positive hensyn er ikke bevis på at faren er oppdaget. Kontroller profilen og den konkrete tilbakemeldingen manuelt.",
             );
           if (profile.kind === "defensible-alternative" && target.status === "needs-review")
             record.observations.push(
@@ -431,6 +566,10 @@ export async function runCalibration(options: {
       }
     } catch (error) {
       record.error = error instanceof Error ? error.message : "Ukjent feil";
+      if (error instanceof AiProviderError) {
+        record.status = "provider-error";
+        providerFailure = { code: error.code, message: error.message };
+      }
     }
     record.modelCalls = calls - previousCalls;
     record.durationSeconds = Math.round((Date.now() - started) / 1000);
@@ -440,15 +579,21 @@ export async function runCalibration(options: {
   }
   const report = {
     sourceVersion: SOURCE_VERSION,
+    implementationSha256,
     provider,
     phase,
     records,
+    ...(providerFailure ? { providerFailure } : {}),
     productionGatewayVerified:
       provider === "lovable" &&
       !options.generate &&
       gatewayResponses > 0 &&
-      records.every((record) => record.status !== "failed"),
-    executionMode: options.generate ? "injected-test" : "live",
+      records.every((record) =>
+        ["generation-complete", "automated-checks-complete", "needs-review"].includes(
+          record.status,
+        ),
+      ),
+    executionMode,
     automatedComplete: records.filter((record) => record.status === "automated-checks-complete")
       .length,
     clinicalApproval: "not established; independent clinical review required",
@@ -476,6 +621,9 @@ async function main() {
     (args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined);
   const seed = Number(value("--seed") ?? 790);
   if (!Number.isInteger(seed)) throw new Error("--seed må være et heltall.");
+  const suite = value("--suite") ?? "core";
+  if (suite !== "core" && suite !== "catalog")
+    throw new Error("--suite må være core eller catalog.");
   if (args.includes("--dry-run")) {
     console.log(
       JSON.stringify(
@@ -484,7 +632,7 @@ async function main() {
           noModelCalls: true,
           noFilesWritten: true,
           sourceVersion: SOURCE_VERSION,
-          plan: calibrationPlan(seed),
+          plan: calibrationPlan(seed, suite),
         },
         null,
         2,
@@ -504,13 +652,16 @@ async function main() {
     seed,
     provider,
     phase,
+    suite,
     out: value("--out") ?? resolve("work", "calibration"),
     ...(only ? { only } : {}),
     ...(resume ? { resume } : {}),
   });
   console.log(`Lokalt kontrollgrunnlag: ${result.folder}. Klinisk godkjenning gjenstår.`);
   if (
-    result.records.some((record) => record.status === "failed" || record.status === "needs-review")
+    result.records.some(
+      (record) => !["generation-complete", "automated-checks-complete"].includes(record.status),
+    )
   )
     process.exitCode = 1;
 }

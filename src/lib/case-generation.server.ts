@@ -22,6 +22,7 @@ import {
 import { SOURCE_VERSION } from "./case-sources.server";
 import type { VarietyDraw } from "./case-variety";
 import type { CaseDefinition } from "./case-model";
+import type { ResponseMetadata } from "./ai-gateway.server";
 
 export type JsonGenerator = (args: {
   instructions: string;
@@ -29,6 +30,7 @@ export type JsonGenerator = (args: {
   schemaName: string;
   schema: Record<string, unknown>;
   effort?: "low" | "medium" | "high";
+  onResponse?: (metadata: ResponseMetadata) => void;
 }) => Promise<unknown>;
 export async function generateValidatedCase(args: {
   id: string;
@@ -39,8 +41,14 @@ export async function generateValidatedCase(args: {
 }) {
   let issues: string[] = [];
   let rejected: GeneratedCase | undefined;
+  const modelResponses: { purpose: string; response: ResponseMetadata }[] = [];
+  const generate: JsonGenerator = (request) =>
+    args.generate({
+      ...request,
+      onResponse: (response) => modelResponses.push({ purpose: request.schemaName, response }),
+    });
   for (let attempt = 0; attempt < 2; attempt++) {
-    const result = await args.generate({
+    const result = await generate({
       instructions: SYSTEM_INSTRUCTIONS,
       input: generationPrompt(args.draw, args.stages, args.recent, issues, rejected),
       schemaName: "case_draft_v3",
@@ -62,7 +70,7 @@ export async function generateValidatedCase(args: {
       continue;
     }
     const solved = blindSolutionContract.validator.safeParse(
-      await args.generate({
+      await generate({
         instructions:
           "Du er en uavhengig klinisk underviser. Løs bare fra oppgitte studentdata; ikke gjett manglende undersøkelser.",
         input: blindSolutionPrompt(definition),
@@ -78,7 +86,7 @@ export async function generateValidatedCase(args: {
     issues = validateBlindSolution(solved.data, definition);
     if (issues.length) continue;
     const reviewed = reviewContract.validator.safeParse(
-      await args.generate({
+      await generate({
         instructions: SYSTEM_INSTRUCTIONS,
         input: reviewPrompt(generated, args.draw, args.recent, definition, solved.data),
         schemaName: "case_review_v3",
@@ -105,6 +113,7 @@ export async function generateValidatedCase(args: {
         sourceVersion: SOURCE_VERSION,
         sourceIds: args.draw.sourceIds,
         createdAt: new Date().toISOString(),
+        ...(modelResponses.length ? { modelResponses } : {}),
       },
       attempts: attempt + 1,
     };
@@ -121,4 +130,5 @@ export type Assessment = {
   sourceVersion: string;
   sourceIds: string[];
   createdAt: string;
+  modelResponses?: { purpose: string; response: ResponseMetadata }[];
 };

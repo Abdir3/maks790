@@ -317,7 +317,7 @@ export function Landing({
               icon={Zap}
               title="Kort klinisk case"
               detail="Tolk funn og begrunn vurderingene dine"
-              time="2–4 spørsmål"
+              time="2–3 spørsmål"
               onClick={onQuick}
               disabled={!authReady || signingOut}
             />

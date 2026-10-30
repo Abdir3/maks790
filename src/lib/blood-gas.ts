@@ -58,7 +58,7 @@ export function bloodGasReferenceRanges(sampleType: BloodGasInput["sampleType"],
       (child
         ? "CO₂/HCO₃-intervallene bygger hovedsakelig på voksne; barn krever aldersvurdering, særlig spedbarn. "
         : "") +
-      "Oksygenering vurderes sammen med oksygentilførsel og klinikk; venøs pO₂ erstatter ikke arteriell pO₂.",
+      "Arteriell pO₂-referanse gjelder romluft og tilpasses alder. Oksygenering vurderes sammen med oksygentilførsel og klinikk; venøs pO₂ erstatter ikke arteriell pO₂.",
     sourceUrl: BLOOD_GAS_REFERENCE_SOURCE,
   };
 }
