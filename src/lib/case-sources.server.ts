@@ -6,6 +6,41 @@ export const COMPATIBLE_SOURCE_VERSIONS = ["exam-info-2026-10-28-v3", SOURCE_VER
 const compendium = "https://drive.google.com/file/d/1g-Wdd3TfFR218yMBjqfwEP6tZVWMeDhk/view";
 export const SOURCES: SourceLink[] = [
   {
+    id: "neutropenic-infection-recognition",
+    title: "NICE CG151: Mistenkt nøytropen infeksjon og akutt vurdering",
+    url: "https://www.nice.org.uk/guidance/cg151/chapter/Recommendations",
+    scope:
+      "Anbefalingene 1.3.1, 1.4.1 og 1.4.4 kontrollert i indeksert primærkildetekst 30.10.2026; direkte sideoppslag ga 403. CG151 er opprinnelig fra 2012. Pasienter under kreftbehandling som blir syke, skal vurderes med mistanke om nøytropen infeksjon og henvises umiddelbart til sykehusvurdering ved slik mistanke. Mistenkt nøytropen sepsis behandles som en akutt tilstand med umiddelbar empirisk antibiotika samtidig med klinisk undersøkelse og relevante blodprøver/kulturer. Feber er ikke et absolutt krav i CG151s diagnostiske vurdering når andre tegn eller symptomer er forenlige med klinisk betydningsfull sepsis. Fravær av feber alene begrunner derfor ikke venting. Dette er britisk støtte for gjenkjenning og hastegrad; termen nøytropen sepsis skal ikke gjøre enhver isolert funksjonsendring til bekreftet norsk sepsisdiagnose. Britiske antibiotikavalg, profylakse, doser og utskrivningsregimer er ikke omfattet og skal ikke overføres til norsk behandling fra dette utdraget.",
+  },
+  {
+    id: "febrile-neutropenia-current",
+    title: "Helsedirektoratet: Febril nøytropeni",
+    url: "https://www.helsedirektoratet.no/retningslinjer/antibiotika-i-sykehus/febril-noytropeni",
+    scope:
+      "Faglig endret 18.02.2026; definisjoner, hastegrad og risikovurdering kontrollert 30.10.2026. Anbefalingen gjelder akutt febril nøytropeni med ukjent fokus/mikrobe. Febergrensen er én temperatur på minst 38,3 °C eller minst 38,0 °C i over én time. Nøytrofile høyst 0,5 × 10⁹/L, eller forventet fall under dette innen 48 timer, oppfyller nøytropenikriteriet. Tilstanden krever rask empirisk antibiotikabehandling, med retningslinjens mål om oppstart innen én time fra symptomdebut. Tretimersvinduet fra generell sepsisveiledning skal ikke begrunne venting ved febril nøytropeni. Ikke vent på organsvikt eller ferdige mikrobesvar. Blodkultur tas før behandlingen uten unødig forsinkelse. Risiko vurderes også ut fra forventet varighet av nøytropeni, komorbiditet, organsvikt, mukositt, krefttype, transplantasjon og resistenshistorikk. En risikoskår alene avgjør ikke trygg hjemreise. Nyreskadefare og annen nefrotoksisk behandling påvirker antibiotikavalget. Eventuell tidlig oral behandling utenfor sykehus krever konkret vurdering av klinisk stabilitet, infeksjonsforløp og forsvarlig oppfølging. Utdraget gir ikke MASCC-poeng, legemiddeldoser, behandlingsvarighet eller automatisk antibiotikaindikasjon ved enhver afebril funksjonsendring.",
+  },
+  {
+    id: "palliative-pain-assessment-current",
+    title: "Helsedirektoratet: Kartlegging og oppfølging av kreftsmerter",
+    url: "https://www.helsedirektoratet.no/retningslinjer/palliasjon-i-kreftomsorgen-handlingsprogram/symptomer-og-tilstander/smerte",
+    scope:
+      "Faglig endret 14.10.2019; kartlegging, supplerende undersøkelser og overordnede behandlingsprinsipper kontrollert 30.10.2026. Vurder hvilesmerte, utløsende aktivitet, døgnmønster, varighet og hyppighet av smerteepisoder sammen med lokalisasjon, karakter, funksjon og psykososiale/eksistensielle forhold. Pasientens egen beskrivelse og mål er sentrale. Nytt smertemønster krever vurdering av progresjon, komplikasjon, behandling og andre årsaker. Supplerende undersøkelser velges etter anamnese og kliniske funn; alle trenger ikke samme bilde- eller prøvepakke. Vurder effekt og bivirkninger gjentatt, og tilpass lindring til faktisk smerteforløp og ressurser. Dårlig balanse kan begrunne spesialistvurdering eller revurdering av opioidbehandlingen. Utdraget gir ikke doseøkning, omregningstabell, antidotregime eller generell godkjenning av hurtigvirkende fentanyl. Preparatspesifikke indikasjoner og kontraindikasjoner må kontrolleres særskilt.",
+  },
+  {
+    id: "morphine-renal-risk-current",
+    title: "Norsk legemiddelhåndbok: Morfin, nyrefunksjon og bivirkninger",
+    url: "https://www.legemiddelhandboka.no/extended/virkestoff/morfin",
+    scope:
+      "Revidert 31.08.2023; egenskaper og farmakokinetikk kontrollert 30.10.2026. Nedsatt nyrefunksjon kan forsinke utskillelsen av aktive morfinmetabolitter og forlenge virkningen. Sedasjon, respirasjonsdepresjon, hallusinasjoner, rykninger eller hyperalgesi kan gi mistanke om uønsket opioidvirkning, men må vurderes med dosehistorikk, tidsforløp, klinikk og andre årsaker. Revurder balansen mellom lindring og bivirkninger med ansvarlig lege; et annet opioid kan være aktuelt ved utilfredsstillende balanse. Dette er ikke en automatisk bytteordre eller et generelt morfinforbud ved all nyrepåvirkning. Utdraget gir ikke eksakte doser, omregningsforhold, én universell responstid eller et naloksonregime.",
+  },
+  {
+    id: "intranasal-fentanyl-eligibility",
+    title: "Felleskatalogen: Instanyl DoseGuard, indikasjon og nødvendig opioidtoleranse",
+    url: "https://www.felleskatalogen.no/medisin/instanyl-doseguard-gentili-560085",
+    scope:
+      "Indikasjon, kontraindikasjon og doseringsforutsetninger kontrollert 30.10.2026. Gjelder gjennombruddssmerter hos voksne som allerede får vedlikeholdsbehandling med opioider for kroniske kreftsmerter. Denne defineres som minst 60 mg peroral morfin per døgn, minst 25 mikrogram/time transdermal fentanyl, minst 30 mg oksykodon per døgn, minst 8 mg peroral hydromorfon per døgn eller ekvianalgetisk annet opioid i minst én uke. Litt daglig morfin er derfor ikke alene tilstrekkelig grunnlag for Instanyl. Uten den definerte vedlikeholdsbehandlingen er preparatet kontraindisert fordi faren for respirasjonsdepresjon øker. Preparatet skal initieres og følges av lege med erfaring i opioidbehandling av kreftpasienter; valg og titrering må være individuelle. Utdraget støtter kontroll av indikasjon og toleranse, ikke valg av nesespraydose, konvertering fra et annet fentanylpreparat eller behandling av andre akutte smerter. Andre preparaters vilkår må kontrolleres særskilt.",
+  },
+  {
     id: "calcium-interpretation-current",
     title: "Akershus universitetssykehus: Begrensninger ved albuminkorrigert kalsium",
     url: "https://www.ahus.no/nyheter/diagnostikk-og-teknologi/albumin-ny-analysemetode-samt-avvikling-av-analyse/",

@@ -170,6 +170,14 @@ eller alle kliniske situasjoner på nettsiden.
 Gjennomgangen omfatter også voksen astma, hyponatremi, delirium,
 GI-blødning, postoperativ analgesi, preparatspesifikk opioidrisiko,
 LAR og akutt smerte, tolketjenester, etterlatte og aktuelle ØNH-kilder.
+Palliativ smertevurdering skiller tilgjengelig utredning fra undersøkelser
+som først planlegges. Morfin ved nyresvikt vurderes i klinisk sammenheng,
+og Instanyls preparatspesifikke vilkår gir grunnlag for å kontrollere et
+konkret forslag uten å kreve dette preparatet i enhver besvarelse.
+Febril nøytropeni har et eget aktuelt kildegrunnlag for hastegrad og
+risikovurdering; tidlig håndtering skal ikke avhenge av ferdige dyrkningssvar.
+NICE gir avgrenset støtte for mistanke og akutt vurdering også når feber
+mangler. Britiske antibiotikaregimer overføres ikke til norsk behandling.
 Hypoglykemi skiller risiko ved terapeutisk glimepiridbruk fra
 forgiftningsregimer. Kalsiumtolkning tar hensyn til at albuminkorreksjon
 ikke automatisk er mer pålitelig enn totalkalsium. Oppgavens analyse,

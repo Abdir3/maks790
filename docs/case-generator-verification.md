@@ -17,7 +17,7 @@ Den er ikke publisert. Endringene krever ingen ny SQL-migrering.
   innledende presentasjoner og senere tydelig atskilte pasientopplysninger.
 - Avgrensede primærkilder styrker kliniske og rettslige vurderinger.
   Nye kilde-ID-er bevarer omfanget til lagrede V3-caser. Ukjente versjoner
-  avvises fortsatt. Kilderegisteret har 85 poster; alle 44 opprinnelige
+  avvises fortsatt. Kilderegisteret har 90 poster; alle 44 opprinnelige
   kildeomfang er kontrollert uendret mot den publiserte revisjonen.
   Undersøkelseskrav tilpasses den konkrete beslutningen: nødvendig
   årsaksdiagnostikk skal være komplett, mens en innledende hasteoppgave
