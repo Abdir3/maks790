@@ -276,6 +276,7 @@ describe("Generation orchestration", () => {
       let reviews = 0;
       await assert.rejects(
         generateValidatedCase({
+          independentReview: true,
           id: "x",
           draw,
           stages: 3,
@@ -311,6 +312,7 @@ describe("Generation orchestration", () => {
   it("reviews a complete timeline then returns only student content", async () => {
     const calls: string[] = [];
     const result = await generateValidatedCase({
+      independentReview: true,
       id: "gen-test",
       draw,
       stages: 3,
@@ -361,6 +363,7 @@ describe("Generation orchestration", () => {
     let drafts = 0,
       reviews = 0;
     const result = await generateValidatedCase({
+      independentReview: true,
       id: "x",
       draw,
       stages: 3,
@@ -398,7 +401,7 @@ describe("Generation orchestration", () => {
         recent: [other],
         generate: async () => generatedFixture(),
       }),
-      /kvalitetskontrollen/,
+      /Ingen case er lagret/,
     );
   });
 });

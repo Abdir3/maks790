@@ -18,6 +18,8 @@ import {
   type Difficulty,
 } from "@/lib/case-variety";
 import type { CaseDefinition } from "@/lib/case-model";
+import type { GenerationProgress } from "@/lib/case-generation-progress";
+import { CaseGenerationProgress } from "./case-generation-progress";
 export type GeneratorFormat = "long" | "quick";
 const GENERATION_WAIT_MS = 21 * 60_000;
 export function CaseGenerator({
@@ -37,6 +39,9 @@ export function CaseGenerator({
   const [difficulty, setDifficulty] = useState<Difficulty>("advanced");
   const [topic, setTopic] = useState("auto");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<GenerationProgress>({ phase: "preparing" });
+  const [startedAt, setStartedAt] = useState(0);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const activeRequest = useRef<symbol | null>(null);
   const currentUserId = useRef(user?.id);
   currentUserId.current = user?.id;
@@ -91,6 +96,9 @@ export function CaseGenerator({
     }
     setBusy(true);
     setError(null);
+    setProgress({ phase: "preparing" });
+    setStartedAt(Date.now());
+    setUpdatedAt(null);
     waitTimer.current = setTimeout(() => {
       if (!isCurrentRequest()) return;
       if (!releaseRequest()) return;
@@ -102,6 +110,11 @@ export function CaseGenerator({
     try {
       const result = await generate({
         data: { format, stages: format === "quick" ? 1 : stages, startSetting, difficulty, topic },
+        onProgress: (next) => {
+          if (!isCurrentRequest()) return;
+          setProgress(next);
+          setUpdatedAt(Date.now());
+        },
       });
       // A timed-out or unmounted request must not navigate later or affect a retry.
       if (isCurrentRequest()) onReady(result.definition);
@@ -145,110 +158,113 @@ export function CaseGenerator({
           </div>
         ) : (
           <div className="space-y-5">
-            <section
-              aria-label="Valgt øving"
-              className="rounded-xl border border-border bg-muted/30 p-4"
-            >
-              <p className="font-medium">
-                {format === "quick"
-                  ? "Én kortcase med 2–4 spørsmål"
-                  : `${stages} deler med åpne oppgaver`}
-              </p>
-              <dl className="mt-3 grid gap-2 text-sm">
-                <div className="flex flex-wrap gap-x-2">
-                  <dt className="text-muted-foreground">Tema:</dt>
-                  <dd>{topicLabel}</dd>
-                </div>
-                <div className="flex flex-wrap gap-x-2">
-                  <dt className="text-muted-foreground">Startsted:</dt>
-                  <dd>{settingLabel}</dd>
-                </div>
-                <div className="flex flex-wrap gap-x-2">
-                  <dt className="text-muted-foreground">Nivå:</dt>
-                  <dd>{difficulty === "advanced" ? "Avansert" : "Kompleks"}</dd>
-                </div>
-              </dl>
-            </section>
-            <details className="group rounded-xl border border-border">
-              <summary className="cursor-pointer rounded-xl px-4 py-3 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                Tilpass casen
-              </summary>
-              <fieldset
-                disabled={busy}
-                className="case-generator-fields px-4 pb-4 disabled:opacity-60"
-              >
-                <legend className="sr-only">Valgfrie innstillinger</legend>
-                <label>
-                  Tema
-                  <select value={topic} onChange={(e) => changeTopic(e.target.value)}>
-                    <option value="auto">Automatisk variasjon mellom pensumtemaene</option>
-                    {TOPICS.map((t) => (
-                      <option
-                        key={t.id}
-                        value={t.id}
-                        disabled={!isTopicSettingCompatible(t.id, "auto", format ?? undefined)}
-                      >
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Startsted
-                  <select
-                    value={startSetting}
-                    onChange={(e) => setStartSetting(e.target.value as SettingId)}
+            {busy ? (
+              <CaseGenerationProgress
+                progress={progress}
+                startedAt={startedAt}
+                updatedAt={updatedAt}
+                label={format === "quick" ? "Kort klinisk case" : `Eksamenscase · ${stages} deler`}
+              />
+            ) : (
+              <>
+                <section
+                  aria-label="Valgt øving"
+                  className="rounded-xl border border-border bg-muted/30 p-4"
+                >
+                  <p className="font-medium">
+                    {format === "quick"
+                      ? "Én kortcase med 2–4 spørsmål"
+                      : `${stages} deler med åpne oppgaver`}
+                  </p>
+                  <dl className="mt-3 grid gap-2 text-sm">
+                    <div className="flex flex-wrap gap-x-2">
+                      <dt className="text-muted-foreground">Tema:</dt>
+                      <dd>{topicLabel}</dd>
+                    </div>
+                    <div className="flex flex-wrap gap-x-2">
+                      <dt className="text-muted-foreground">Startsted:</dt>
+                      <dd>{settingLabel}</dd>
+                    </div>
+                    <div className="flex flex-wrap gap-x-2">
+                      <dt className="text-muted-foreground">Nivå:</dt>
+                      <dd>{difficulty === "advanced" ? "Avansert" : "Kompleks"}</dd>
+                    </div>
+                  </dl>
+                </section>
+                <details className="group rounded-xl border border-border">
+                  <summary className="cursor-pointer rounded-xl px-4 py-3 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    Tilpass casen
+                  </summary>
+                  <fieldset
+                    disabled={busy}
+                    className="case-generator-fields px-4 pb-4 disabled:opacity-60"
                   >
-                    {START_SETTINGS.map((s) => (
-                      <option
-                        key={s.id}
-                        value={s.id}
-                        disabled={!isTopicSettingCompatible(topic, s.id, format ?? undefined)}
+                    <legend className="sr-only">Valgfrie innstillinger</legend>
+                    <label>
+                      Tema
+                      <select value={topic} onChange={(e) => changeTopic(e.target.value)}>
+                        <option value="auto">Automatisk variasjon mellom pensumtemaene</option>
+                        {TOPICS.map((t) => (
+                          <option
+                            key={t.id}
+                            value={t.id}
+                            disabled={!isTopicSettingCompatible(t.id, "auto", format ?? undefined)}
+                          >
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Startsted
+                      <select
+                        value={startSetting}
+                        onChange={(e) => setStartSetting(e.target.value as SettingId)}
                       >
-                        {s.id === "auto" ? "Velg automatisk" : s.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Faglig utfordring
-                  <select
-                    value={difficulty}
-                    onChange={(e) => setDifficulty(e.target.value as Difficulty)}
-                  >
-                    <option value="advanced">Avansert – selvstendig vurdering</option>
-                    <option value="complex">Kompleks – flere hensyn i konflikt</option>
-                  </select>
-                </label>
-                {format === "long" && (
-                  <label>
-                    Antall deler
-                    <select value={stages} onChange={(e) => setStages(Number(e.target.value))}>
-                      {[3, 4, 5, 6].map((n) => (
-                        <option key={n} value={n}>
-                          {n} deler
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Startsteder som ikke passer til temaet, er utilgjengelige. Ved bytte av tema
-                  velges startsted automatisk hvis det trengs.
+                        {START_SETTINGS.map((s) => (
+                          <option
+                            key={s.id}
+                            value={s.id}
+                            disabled={!isTopicSettingCompatible(topic, s.id, format ?? undefined)}
+                          >
+                            {s.id === "auto" ? "Velg automatisk" : s.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Faglig utfordring
+                      <select
+                        value={difficulty}
+                        onChange={(e) => setDifficulty(e.target.value as Difficulty)}
+                      >
+                        <option value="advanced">Avansert – selvstendig vurdering</option>
+                        <option value="complex">Kompleks – flere hensyn i konflikt</option>
+                      </select>
+                    </label>
+                    {format === "long" && (
+                      <label>
+                        Antall deler
+                        <select value={stages} onChange={(e) => setStages(Number(e.target.value))}>
+                          {[3, 4, 5, 6].map((n) => (
+                            <option key={n} value={n}>
+                              {n} deler
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Startsteder som ikke passer til temaet, er utilgjengelige. Ved bytte av tema
+                      velges startsted automatisk hvis det trengs.
+                    </p>
+                  </fieldset>
+                </details>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Du kan skrive eller diktere, få tilbakemelding og se løsningsforslag. KI-støttet
+                  øving gir ikke karakter.
                 </p>
-              </fieldset>
-            </details>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Du kan skrive eller diktere, få tilbakemelding og se løsningsforslag. KI-støttet øving
-              gir ikke karakter.
-            </p>
-            {busy && (
-              <div role="status" aria-live="polite" className="space-y-2">
-                <p>Lager casen og kontrollerer kvaliteten …</p>
-                <p className="text-sm text-muted-foreground">
-                  Det kan ta flere minutter. Hold denne fanen åpen. Casen åpnes her når den er klar.
-                </p>
-              </div>
+              </>
             )}
             {error && (
               <p role="alert" className="text-sm text-[#ef565c]">

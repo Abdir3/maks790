@@ -1,4 +1,5 @@
 import { supabase } from "../integrations/supabase/client";
+import { readGenerationProgress, type GenerationProgress } from "./case-generation-progress";
 
 type Envelope = {
   status?: string;
@@ -6,10 +7,14 @@ type Envelope = {
   jobId?: string;
   retryAfterMs?: number;
   error?: string;
+  progress?: unknown;
 };
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function callCaseApi<T>(initial: Record<string, unknown>): Promise<T> {
+export async function callCaseApi<T>(
+  initial: Record<string, unknown>,
+  onProgress?: (progress: GenerationProgress) => void,
+): Promise<T> {
   const url = import.meta.env["VITE_SUPABASE_URL"];
   const publicKey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
   if (!url || !publicKey) throw new Error("Casetjenesten er ikke konfigurert.");
@@ -53,6 +58,8 @@ export async function callCaseApi<T>(initial: Record<string, unknown>): Promise<
         body.error ??
           (response.status === 401 ? "Logg inn igjen." : "Casetjenesten svarte ikke. Prøv igjen."),
       );
+    const progress = readGenerationProgress(body.progress);
+    if (progress) onProgress?.(progress);
     if (body.status === "completed") return body.result as T;
     if (body.status !== "pending" || !body.jobId)
       throw new Error("Casetjenesten returnerte et ugyldig svar.");

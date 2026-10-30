@@ -78,8 +78,11 @@ describe("Resumable Astra responses", () => {
         transport,
       });
     await assert.rejects(make()(args), PendingModel);
+    assert.equal(steps[0]!.status, "queued");
     await assert.rejects(make()(args), PendingModel);
+    assert.equal(steps[0]!.status, "in_progress");
     assert.deepEqual(await make()(args), { ok: true });
+    assert.equal(steps[0]!.status, "completed");
     assert.deepEqual(await make()(args), { ok: true });
     assert.equal(calls, 3);
     assert.equal(steps.length, 1);
