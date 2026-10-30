@@ -4,3 +4,8 @@ project_id = "seqtqwpsellspkxhbeky"
 # The handler verifies the user's JWT with Supabase Auth before any operation.
 # This supports modern signing keys as well as legacy JWTs.
 verify_jwt = false
+
+[functions.case-worker]
+# This internal endpoint verifies a dedicated secret held by Vault and Edge.
+# It never accepts user identities or model input from the request body.
+verify_jwt = false

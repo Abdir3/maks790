@@ -47,6 +47,7 @@ export const actionSchema = z.discriminatedUnion("action", [
     .object({ action: z.literal("model"), requestId: z.string().uuid(), data: caseIdSchema })
     .strict(),
   z.object({ action: z.literal("poll"), jobId: z.string().uuid() }).strict(),
+  z.object({ action: z.literal("generation-status") }).strict(),
   z.object({ action: z.literal("list") }).strict(),
   z.object({ action: z.literal("delete"), data: caseIdSchema }).strict(),
   z

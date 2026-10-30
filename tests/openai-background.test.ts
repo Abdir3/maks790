@@ -30,6 +30,32 @@ const response = (status: string, output?: string) =>
   });
 
 describe("Resumable Astra responses", () => {
+  it("uses the requested processing tier without changing model, reasoning or schema", async () => {
+    const steps: ModelStep[] = [];
+    const generate = createBackgroundGenerator({
+      apiKey: "test",
+      steps,
+      serviceTier: "ultrafast",
+      save: async () => {},
+      transport: (async (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        assert.equal(body.service_tier, "ultrafast");
+        assert.equal(body.model, "gpt-6-astra");
+        assert.deepEqual(body.reasoning, { effort: "medium" });
+        assert.deepEqual(body.text.format.schema, args.schema);
+        assert.equal(body.instructions, args.instructions);
+        return Response.json({
+          id: "resp_test",
+          status: "completed",
+          model: "gpt-6-astra",
+          service_tier: "ultrafast",
+          output_text: '{"ok":true}',
+        });
+      }) as typeof fetch,
+    });
+    assert.deepEqual(await generate(args), { ok: true });
+    assert.equal(steps[0]!.serviceTier, "ultrafast");
+  });
   it("limits each Edge invocation to one provider request even for immediate completions", async () => {
     let calls = 0;
     const steps: ModelStep[] = [];

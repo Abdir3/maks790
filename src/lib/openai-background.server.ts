@@ -7,6 +7,7 @@ export type ModelStep = {
   responseId?: string;
   output?: unknown;
   model?: string;
+  serviceTier?: string;
   status?: "queued" | "in_progress" | "completed";
 };
 export class PendingModel extends Error {
@@ -28,6 +29,7 @@ export function createBackgroundGenerator(options: {
   steps: ModelStep[];
   save: () => Promise<void>;
   transport?: typeof fetch;
+  serviceTier?: "default" | "fast" | "ultrafast";
 }): JsonGenerator {
   let index = 0;
   let remoteCalls = 0;
@@ -70,6 +72,7 @@ export function createBackgroundGenerator(options: {
             : {
                 body: JSON.stringify({
                   model: "gpt-6-astra",
+                  ...(options.serviceTier ? { service_tier: options.serviceTier } : {}),
                   background: true,
                   store: false,
                   instructions: args.instructions,
@@ -95,6 +98,7 @@ export function createBackgroundGenerator(options: {
       id?: string;
       status?: string;
       model?: string;
+      service_tier?: string;
       error?: { code?: string };
       output_text?: string;
       output?: { content?: { type?: string; text?: string }[] }[];
@@ -106,6 +110,7 @@ export function createBackgroundGenerator(options: {
     )
       throw new AiProviderError("unavailable");
     step.responseId = body.id;
+    if (body.service_tier) step.serviceTier = body.service_tier;
     if (body.status === "queued" || body.status === "in_progress") {
       step.status = body.status;
       await options.save();
