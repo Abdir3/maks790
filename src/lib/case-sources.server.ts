@@ -6,6 +6,20 @@ export const COMPATIBLE_SOURCE_VERSIONS = ["exam-info-2026-10-28-v3", SOURCE_VER
 const compendium = "https://drive.google.com/file/d/1g-Wdd3TfFR218yMBjqfwEP6tZVWMeDhk/view";
 export const SOURCES: SourceLink[] = [
   {
+    id: "cord-stability-support-current",
+    title: "NICE NG234: Leie, avlastning og vurdering av spinal stabilitet",
+    url: "https://www.nice.org.uk/guidance/ng234/chapter/recommendations",
+    scope:
+      "Anbefalingene 1.4.1–1.4.4 og 1.6.1–1.6.4 fra 2023 kontrollert i indeksert primærtekst 30.10.2026; direkte sideoppslag ga 403. Ved mistenkt eller bekreftet malign medullakompresjon og nevrologiske tegn som tyder på instabilitet, startes avlastning/immobilisering raskt, også under transport. Dette vurderes også ved moderate eller sterke bevegelsesutløste smerter. Ryggliggende leie kan være flatt eller med delvis heving; smerte eller pustebesvær som gjør leiet vanskelig å tåle, krever tilpasning. Tidlig ekspertvurdering av stabilitet skal begrense unødig immobilisering. Gradert sitting og belastning forutsetter at vurdering, inkludert bilder, tyder på stabilitet, med oppfølging av nevrologi og smerte. Forverring under mobilisering krever avlastning og ny stabilitetsvurdering. Dette er britisk støtte for individuelle forflytningsprinsipper, ikke et absolutt krav om flatt leie, en bestemt løfteteknikk, operasjonsvalg eller norske transportprosedyrer.",
+  },
+  {
+    id: "enzalutamide-interactions-current",
+    title: "Felleskatalogen: Enzalutamid og relevante legemiddelinteraksjoner",
+    url: "https://www.felleskatalogen.no/medisin/xtandi-astellas-584804",
+    scope:
+      "Forsiktighetsregler og interaksjonsavsnitt kontrollert direkte 30.10.2026. Enzalutamid er en sterk induktor av CYP3A4 og moderat induktor av CYP2C9 og CYP2C19. Samtidig behandling kan derfor få endret effekt og må gjennomgås konkret. Den tilknyttede DMP-oppføringen om deksametason beskriver økt metabolisme via CYP3A4 og mulig redusert konsentrasjon; oppføringen bygger på indirekte data. Dette støtter oppmerksomhet på interaksjonen og klinisk oppfølging med ansvarlig lege når disse legemidlene faktisk brukes. Det gir ikke grunnlag for automatisk seponering, en bestemt doseøkning eller å forklare pasientens aktuelle nevrologiske utvikling med interaksjonen alene. Utdraget angir ingen dosefaktor, individuell eksponeringsreduksjon, tid til steroidvirkning eller generell konvertering til et annet preparat.",
+  },
+  {
     id: "neutropenic-infection-recognition",
     title: "NICE CG151: Mistenkt nøytropen infeksjon og akutt vurdering",
     url: "https://www.nice.org.uk/guidance/cg151/chapter/Recommendations",

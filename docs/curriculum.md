@@ -184,6 +184,13 @@ ikke automatisk er mer pålitelig enn totalkalsium. Oppgavens analyse,
 referanse og eventuell regnekonvensjon må være tydelig; ingen universell
 korreksjonsformel blir en skjult fasit.
 
+Medullakompresjon har avgrenset støtte fra
+[NICE NG234](https://www.nice.org.uk/guidance/ng234/chapter/recommendations)
+for individuelt tilpasset leie og stabilitetsvurdering.
+[Enzalutamids interaksjonsgrunnlag](https://www.felleskatalogen.no/medisin/xtandi-astellas-584804)
+støtter konkret legemiddelgjennomgang når preparatet brukes, uten å gjøre
+en bestemt doseendring eller interaksjon til et krav i alle kreftcaser.
+
 Nye kilde-ID-er lar lagrede V3-caser beholde sitt opprinnelige kildeomfang.
 Eksisterende ID-er er ikke gitt nye behandlingsregimer. V3 og V4 kan derfor
 leses av vurderingskjeden, mens ukjente versjoner avvises. Denne

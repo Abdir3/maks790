@@ -993,7 +993,14 @@ export const CLINICAL_BLUEPRINTS: readonly ClinicalBlueprint[] = [
     ],
     "Knytte nevrologiske funn til tidskritisk kompresjon",
     "Begrunne rask avklaring og bevaring av nevrologisk funksjon",
-    ["cord-compression-current", "cancer-pain", "first-actions"],
+    [
+      "cord-compression-current",
+      "cord-stability-support-current",
+      "cancer-pain",
+      "morphine-renal-risk-current",
+      "enzalutamide-interactions-current",
+      "first-actions",
+    ],
     { minAge: 30, settings: hospital, secondDecision: DECISIONS[0] },
   ),
   b(

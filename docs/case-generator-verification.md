@@ -17,7 +17,7 @@ Den er ikke publisert. Endringene krever ingen ny SQL-migrering.
   innledende presentasjoner og senere tydelig atskilte pasientopplysninger.
 - Avgrensede primærkilder styrker kliniske og rettslige vurderinger.
   Nye kilde-ID-er bevarer omfanget til lagrede V3-caser. Ukjente versjoner
-  avvises fortsatt. Kilderegisteret har 90 poster; alle 44 opprinnelige
+  avvises fortsatt. Kilderegisteret har 92 poster; alle 44 opprinnelige
   kildeomfang er kontrollert uendret mot den publiserte revisjonen.
   Undersøkelseskrav tilpasses den konkrete beslutningen: nødvendig
   årsaksdiagnostikk skal være komplett, mens en innledende hasteoppgave
@@ -59,7 +59,9 @@ Bygget har fortsatt verktøyadvarsler om
 eksisterende konfigurasjon/deprekerte API-er; det er ingen byggefeil.
 Nettleserpakken er undersøkt for servernøkkelnavn, privat lagring og
 genererings-/kontrollprompter uten treff. Dette er en avgrenset
-pakkeinspeksjon, ikke en full sikkerhetsrevisjon.
+pakkeinspeksjon, ikke en full sikkerhetsrevisjon. Generelle scenariometadata,
+inkludert kilde-ID-er, finnes i klientkoden; dette er ikke en lagret cases
+private vurderingsgrunnlag.
 
 33 lagrede eksempler passerte de nye deterministiske strukturkontrollene;
 ett annet eksempel kunne ikke kontrolleres slik fordi scenario-ID manglet.
