@@ -75,7 +75,7 @@ type SavedCase = {
 function Index() {
   const { user, ready } = useAuth();
   const userId = user?.id;
-  const { mode, library: openLibraryRequested } = Route.useSearch();
+  const { mode, library: openLibraryRequested, case: requestedCaseId } = Route.useSearch();
   const navigate = Route.useNavigate();
   const [active, setActive] = useState<CaseDefinition | null>(null);
   const [generating, setGenerating] = useState<GeneratorFormat | null>(null);
@@ -174,8 +174,35 @@ function Index() {
       setExpectedJob(null);
       setDismissedJobId(job.id);
       setActive(job.definition!);
+      void navigate({
+        to: "/",
+        search: { case: job.definition!.id.replace(/^gen-/, "") },
+        replace: true,
+      });
     }
-  }, [generation.job, expectedJobId, generating, refresh, userId]);
+  }, [generation.job, expectedJobId, generating, refresh, userId, navigate]);
+
+  useEffect(() => {
+    if (!ready || !requestedCaseId) return;
+    if (!userId) {
+      void navigate({ to: "/auth", search: { case: requestedCaseId }, replace: true });
+      return;
+    }
+    // The link is only a selection; case contents always come from this account's library.
+    const selected =
+      library.owner === userId
+        ? library.items.find((item) => item.id === requestedCaseId)
+        : undefined;
+    if (selected) {
+      setActive(selected.definition);
+      setGenerating(null);
+      setExpectedJob(null);
+      setLibraryOpen(false);
+    } else if (library.owner === userId && library.status !== "idle") {
+      if (library.status === "loaded") setActive(null);
+      setLibraryOpen(true);
+    }
+  }, [ready, requestedCaseId, userId, library, navigate]);
 
   useEffect(() => {
     if (!openLibraryRequested) return;
@@ -250,6 +277,7 @@ function Index() {
     setExpectedJob(null);
   };
   const openLibrary = () => {
+    closeGenerator();
     setLibraryOpen(true);
     refresh();
   };
@@ -258,6 +286,11 @@ function Index() {
     closeGenerator();
     if (generation.job?.definition?.id === definition.id) setDismissedJobId(generation.job.id);
     setActive(definition);
+    void navigate({
+      to: "/",
+      search: definition.id.startsWith("gen-") ? { case: definition.id.slice(4) } : {},
+      replace: true,
+    });
   };
 
   const backgroundJob =
@@ -285,6 +318,7 @@ function Index() {
       requestId.current += 1;
       setLibrary({ owner: undefined, items: [], status: "idle" });
       setGenerating(null);
+      void navigate({ to: "/", search: {}, replace: true });
       return true;
     } catch {
       setAccountError("Kunne ikke logge deg ut. Prøv igjen.");
@@ -333,8 +367,10 @@ function Index() {
             }
           : {})}
         onExit={() => {
-          setActive(null);
-          refresh();
+          void navigate({ to: "/", search: {}, replace: true }).then(() => {
+            setActive(null);
+            refresh();
+          });
         }}
       />
     );
@@ -363,10 +399,12 @@ function Index() {
         checked={generation.checked}
         error={generation.error}
         showCompleted={Boolean(expectedJobId && expectedJobId === generation.job?.id)}
+        savedCase={saved[0]?.definition ?? null}
         onStart={(options) => void beginGeneration(options)}
         onRefresh={() => void generation.refresh()}
         onClose={closeGenerator}
         onReady={openCase}
+        onOpenLibrary={openLibrary}
       />
       {!generating && !libraryOpen && generationNotice && (
         <div className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-xl">
@@ -404,6 +442,14 @@ function Index() {
               </div>
             ) : (
               <>
+                {requestedCaseId &&
+                  library.status === "loaded" &&
+                  !saved.some((item) => item.id === requestedCaseId) && (
+                    <p role="alert" className="text-sm text-destructive">
+                      Denne casen finnes ikke på kontoen du er logget inn med. Velg en lagret case
+                      nedenfor.
+                    </p>
+                  )}
                 {library.status === "loading" && (
                   <p role="status" className="text-sm text-muted-foreground">
                     Henter casene dine …

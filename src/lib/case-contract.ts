@@ -46,18 +46,6 @@ export const SKILLS = [
   "medication",
   "disposition",
 ] as const;
-const rubric = obj({
-  expected: arr(str(), 2, 6),
-  alternatives: arr(str(), 1, 4),
-  critical: arr(str(), 0, 4),
-  sourceIds: arr(str(1, 80), 1, 6),
-});
-const question = obj({
-  prompt: str(20, 2000),
-  skill: choice([...SKILLS]),
-  temporalScope: choice(["at-time", "whole-case"]),
-  rubric,
-});
 const eventTime = () => num(-525600, 10080);
 const medication = obj({
   name: str(1, 160),
@@ -93,57 +81,82 @@ const report = obj({
   findings: str(1, 1800),
   conclusion: str(1, 1200),
 });
-export const draftContract = obj({
-  patient: str(5, 300),
-  ageYears: num(0, 110),
-  role: str(5, 600),
-  background: arr(str(), 1, 8),
-  diagnosisFamily: str(2, 160),
-  diagnosisAliases: arr(str(2, 100), 1, 8),
-  mechanism: str(5, 600),
-  presentation: str(5, 400),
-  reasoningTarget: str(10, 600),
-  pivotalFindings: arr(str(5, 500), 2, 8),
-  dossier: str(30, 6000),
-  stages: arr(
-    obj({
-      setting: str(2, 120),
-      elapsedMinutes: num(0, 10080),
-      timeLabel: str(2, 120),
-      paragraphs: arr(str(), 1, 6),
-      clinicalFindings: arr(str(), 1, 10),
-      medications: arr(medication, 0, 16),
-      laboratory: arr(laboratory, 0, 24),
-      bloodGas: arr(bloodGas, 0, 4),
-      reports: arr(report, 0, 6),
-      vitals: arr(
-        obj({
-          id: choice([
-            "bp",
-            "pulse",
-            "respiration",
-            "spo2",
-            "temperature",
-            "gcs",
-            "glucose",
-            "lactate",
-            "consciousness",
-            "capillaryRefill",
-            "weight",
-          ]),
-          value: str(1, 160),
-          unit: str(0, 30),
-          note: str(0, 300),
-        }),
-        0,
-        11,
-      ),
-      questions: arr(question, 1, 4),
-    }),
-    1,
-    6,
-  ),
-});
+function caseDraftContract(stageCount?: number) {
+  // Saved assessments retain the original permissive contract. Only new model
+  // requests use the concise contract: a short case must not spend its entire
+  // response budget expanding private rubrics or writing unrequested stages.
+  const compact = stageCount !== undefined;
+  const limit = (original: number, concise: number) => (compact ? concise : original);
+  const rubric = obj({
+    expected: arr(str(1, limit(3000, 320)), 2, 6),
+    alternatives: arr(str(1, limit(3000, 360)), 1, limit(4, 2)),
+    critical: arr(str(1, limit(3000, 240)), 0, limit(4, 3)),
+    sourceIds: arr(str(1, 80), 1, 6),
+  });
+  const question = obj({
+    prompt: str(20, limit(2000, 500)),
+    skill: choice([...SKILLS]),
+    temporalScope: choice(["at-time", "whole-case"]),
+    rubric,
+  });
+  return obj({
+    patient: str(5, 300),
+    ageYears: num(0, 110),
+    role: str(5, limit(600, 300)),
+    background: arr(str(1, limit(3000, 500)), 1, limit(8, 4)),
+    diagnosisFamily: str(2, 160),
+    diagnosisAliases: arr(str(2, 100), 1, 8),
+    mechanism: str(5, limit(600, 300)),
+    presentation: str(5, 400),
+    reasoningTarget: str(10, limit(600, 300)),
+    pivotalFindings: arr(str(5, limit(500, 240)), 2, 8),
+    dossier: str(30, limit(6000, stageCount === 1 ? 1000 : 1400)),
+    stages: arr(
+      obj({
+        setting: str(2, 120),
+        elapsedMinutes: num(0, 10080),
+        timeLabel: str(2, 120),
+        paragraphs: arr(str(1, limit(3000, 600)), 1, limit(6, 4)),
+        clinicalFindings: arr(str(1, limit(3000, 300)), 1, 10),
+        medications: arr(medication, 0, 16),
+        laboratory: arr(laboratory, 0, 24),
+        bloodGas: arr(bloodGas, 0, 4),
+        reports: arr(report, 0, 6),
+        vitals: arr(
+          obj({
+            id: choice([
+              "bp",
+              "pulse",
+              "respiration",
+              "spo2",
+              "temperature",
+              "gcs",
+              "glucose",
+              "lactate",
+              "consciousness",
+              "capillaryRefill",
+              "weight",
+            ]),
+            value: str(1, 160),
+            unit: str(0, 30),
+            note: str(0, 300),
+          }),
+          0,
+          11,
+        ),
+        questions: arr(question, stageCount === 1 ? 2 : 1, compact && stageCount !== 1 ? 2 : 4),
+      }),
+      stageCount ?? 1,
+      stageCount ?? 6,
+    ),
+  });
+}
+export const draftContract = caseDraftContract();
+export function generationDraftContract(stages: number) {
+  if (!Number.isInteger(stages) || stages < 1 || stages > 6)
+    throw new Error("Ugyldig antall deler.");
+  return caseDraftContract(stages);
+}
 export type GeneratedCase = z.infer<typeof draftContract.validator>;
 export const reviewContract = obj({
   coherent: bool,

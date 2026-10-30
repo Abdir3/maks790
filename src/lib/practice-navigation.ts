@@ -1,9 +1,15 @@
 import { allQuestions, answeredCount, parseDraft, type CaseDefinition } from "./case-model";
 
-export type PracticeSearch = { mode?: "quick" | "long"; library?: true };
+export type PracticeSearch = { mode?: "quick" | "long"; library?: true; case?: string };
 
 // Only app-owned destinations may survive an authentication round trip.
 export function validatePracticeSearch(search: Record<string, unknown>): PracticeSearch {
+  const caseId = search["case"];
+  if (
+    typeof caseId === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(caseId)
+  )
+    return { case: caseId.toLowerCase() };
   if (search["mode"] === "quick" || search["mode"] === "long") return { mode: search["mode"] };
   return search["library"] === true ? { library: true } : {};
 }

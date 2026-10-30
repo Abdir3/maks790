@@ -35,6 +35,19 @@ describe("Practice entry and local library progress", () => {
     assert.match(draftSummaryLabel(summary), /Fortsett · 1 av 3/);
     assert.doesNotMatch(JSON.stringify(summary), /Answer|Stray/);
   });
+  it("retains only a case UUID for a saved-case link through login", () => {
+    const id = "a81db549-7bbf-4a4b-821f-7195b111e33b";
+    assert.deepEqual(
+      validatePracticeSearch({
+        case: id.toUpperCase(),
+        mode: "quick",
+        redirect: "https://example.com",
+      }),
+      { case: id },
+    );
+    for (const invalid of ["//example.com", "gen-" + id, [id], {}, "", id + "/anything"])
+      assert.deepEqual(validatePracticeSearch({ case: invalid }), {});
+  });
   it("distinguishes missing, unreadable and completed drafts without modifying them", () => {
     assert.equal(summarizeDraft(groupedCase, null).state, "new");
     for (const raw of ["{", '{"version":99}', "null"])

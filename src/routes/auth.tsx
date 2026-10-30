@@ -30,7 +30,8 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = Route.useNavigate();
-  const { mode: practiceMode } = Route.useSearch();
+  const practiceSearch = Route.useSearch();
+  const { mode: practiceMode } = practiceSearch;
   const { user, ready } = useAuth();
   const [mode, setMode] = useState<"in" | "up">("in");
   const [email, setEmail] = useState("");
@@ -49,9 +50,8 @@ function AuthPage() {
   }, []);
 
   useEffect(() => {
-    if (ready && user && !busy)
-      void navigate({ to: "/", search: practiceMode ? { mode: practiceMode } : {}, replace: true });
-  }, [ready, user, busy, navigate, practiceMode]);
+    if (ready && user && !busy) void navigate({ to: "/", search: practiceSearch, replace: true });
+  }, [ready, user, busy, navigate, practiceSearch]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -62,7 +62,8 @@ function AuthPage() {
     try {
       if (mode === "up") {
         const confirmationUrl = new URL("/", window.location.origin);
-        if (practiceMode) confirmationUrl.searchParams.set("mode", practiceMode);
+        for (const [key, value] of Object.entries(practiceSearch))
+          confirmationUrl.searchParams.set(key, String(value));
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
@@ -73,7 +74,7 @@ function AuthPage() {
         if (data.session) {
           await navigate({
             to: "/",
-            search: practiceMode ? { mode: practiceMode } : {},
+            search: practiceSearch,
             replace: true,
           });
         } else {
@@ -89,7 +90,7 @@ function AuthPage() {
         if (error) throw error;
         await navigate({
           to: "/",
-          search: practiceMode ? { mode: practiceMode } : {},
+          search: practiceSearch,
           replace: true,
         });
       }
