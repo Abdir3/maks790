@@ -31,10 +31,12 @@ export function CaseGenerator({
   checked,
   error,
   showCompleted,
+  savedCase,
   onStart,
   onRefresh,
   onClose,
   onReady,
+  onOpenLibrary,
 }: {
   format: GeneratorFormat | null;
   job: GenerationJob | null;
@@ -45,10 +47,12 @@ export function CaseGenerator({
   checked: boolean;
   error: string | null;
   showCompleted: boolean;
+  savedCase: CaseDefinition | null;
   onStart: (options: GenerateOptions) => void;
   onRefresh: () => void;
   onClose: () => void;
   onReady: (definition: CaseDefinition) => void;
+  onOpenLibrary: () => void;
 }) {
   const navigate = useNavigate();
   const { user, ready } = useAuth();
@@ -116,6 +120,31 @@ export function CaseGenerator({
           </div>
         ) : (
           <div className="space-y-5">
+            {failure && !starting && (
+              <p role="alert" className="text-sm text-[#ef565c]">
+                {failure}
+              </p>
+            )}
+            {failure && !busy && !completed?.definition && (
+              <section className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
+                {savedCase ? (
+                  <>
+                    <p className="font-medium">En tidligere case er klar til øving</p>
+                    <p className="text-sm text-muted-foreground">{savedCase.title}</p>
+                    <Button className="w-full" onClick={() => onReady(savedCase)}>
+                      Åpne siste lagrede case
+                    </Button>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Du kan åpne tidligere caser og øvingseksempler uten å bestille en ny case.
+                  </p>
+                )}
+                <Button className="w-full" variant="outline" onClick={onOpenLibrary}>
+                  Se casebiblioteket
+                </Button>
+              </section>
+            )}
             {completed?.definition ? (
               <div className="space-y-4" role="status">
                 <p>Casen er klar og lagret i casebiblioteket på kontoen din.</p>
@@ -237,11 +266,6 @@ export function CaseGenerator({
                 </p>
               </>
             )}
-            {failure && !starting && (
-              <p role="alert" className="text-sm text-[#ef565c]">
-                {failure}
-              </p>
-            )}
             {busy ? (
               <Button className="w-full" variant="outline" onClick={onClose}>
                 {starting ? "Lukk" : "Fortsett i bakgrunnen"}
@@ -261,6 +285,7 @@ export function CaseGenerator({
               !completed?.definition && (
                 <Button
                   className="w-full"
+                  variant={failure ? "outline" : "default"}
                   disabled={!checked || !ready || !user || !compatible}
                   onClick={run}
                 >

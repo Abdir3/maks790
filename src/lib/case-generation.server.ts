@@ -1,5 +1,5 @@
 import {
-  draftContract,
+  generationDraftContract,
   blindSolutionContract,
   type BlindSolution,
   reviewContract,
@@ -41,15 +41,16 @@ export async function generateValidatedCase(args: {
 }) {
   let issues: string[] = [];
   let rejected: GeneratedCase | undefined;
+  const draft = generationDraftContract(args.stages);
   for (let attempt = 0; attempt < 2; attempt++) {
     const result = await args.generate({
       instructions: SYSTEM_INSTRUCTIONS,
       input: generationPrompt(args.draw, args.stages, args.recent, issues, rejected),
       schemaName: "case_draft_v3",
-      schema: draftContract.json,
+      schema: draft.json,
       effort: "medium",
     });
-    const parsed = draftContract.validator.safeParse(result);
+    const parsed = draft.validator.safeParse(result);
     if (!parsed.success) {
       issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).slice(0, 12);
       continue;
@@ -70,7 +71,6 @@ export async function generateValidatedCase(args: {
       sourceIds: args.draw.sourceIds,
       createdAt: new Date().toISOString(),
     };
-    // The same Astra draft, clinical prompt and deterministic checks are retained.
     // A valid case is ready immediately; do not buy two more model responses.
     if (!args.independentReview) return { definition, assessment, attempts: attempt + 1 };
     const solved = blindSolutionContract.validator.safeParse(
