@@ -35,9 +35,21 @@ connection settings used by the published frontend.
 
 Long Astra calls use OpenAI background responses with `store: false`. Supabase
 stores private checkpoints and leases each job to one request at a time. Polls
-resume the existing generation and quality checks; private drafts and rubrics
+resume the existing generation; private drafts and rubrics
 remain on the backend. OpenAI temporarily retains background responses for
 polling, as described in its [background-mode documentation](https://developers.openai.com/api/docs/guides/background).
+
+Interactive case generation uses one Astra draft at medium reasoning effort.
+The original clinical prompt, curriculum coverage and private assessment are
+preserved. Fast local checks validate structure, clinical data, calculated blood
+gases, timelines, sources and similarity; a concrete failure allows one repair.
+The independent solution and AI review run only in the offline calibration tool.
+Feedback and model answers retain their separate review when requested.
+
+The generation screen shows provider-backed milestones, an animated case preview
+and elapsed time. It does not invent a completion percentage. Only a public phase
+is sent with progress updates; drafts and answers stay private. Animation respects
+the reduced-motion preference.
 
 To update the backend, apply the tracked Supabase migrations, then run:
 

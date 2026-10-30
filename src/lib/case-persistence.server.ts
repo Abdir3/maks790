@@ -22,14 +22,19 @@ function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 
-const assessmentSchema = z.object({
-  generated: draftContract.validator,
-  review: reviewContract.validator,
-  blindSolution: blindSolutionContract.validator.optional(),
-  sourceVersion: z.literal(SOURCE_VERSION),
-  sourceIds: z.array(z.string()).min(1),
-  createdAt: z.string().datetime(),
-});
+const assessmentSchema = z
+  .object({
+    generated: draftContract.validator,
+    review: reviewContract.validator.optional(),
+    validationMode: z.enum(["automatic", "independent"]).optional(),
+    blindSolution: blindSolutionContract.validator.optional(),
+    sourceVersion: z.literal(SOURCE_VERSION),
+    sourceIds: z.array(z.string()).min(1),
+    createdAt: z.string().datetime(),
+  })
+  .refine((value) => value.validationMode === "automatic" || Boolean(value.review), {
+    message: "Vurderingsgrunnlaget mangler valideringsinformasjon.",
+  });
 
 const semanticSchema = z.object({
   topicId: z.string(),
@@ -135,8 +140,16 @@ export async function loadOwnedAssessment(
     throw new Error(
       "Vurderingsgrunnlaget bruker et eldre eller ugyldig kildegrunnlag. Casen og besvarelsen din er beholdt; lag en ny case for oppdatert vurdering.",
     );
-  const { blindSolution, ...basis } = assessment.data;
-  return { definition, assessment: { ...basis, ...(blindSolution ? { blindSolution } : {}) } };
+  const { blindSolution, review, validationMode, ...basis } = assessment.data;
+  return {
+    definition,
+    assessment: {
+      ...basis,
+      ...(blindSolution ? { blindSolution } : {}),
+      ...(review ? { review } : {}),
+      ...(validationMode ? { validationMode } : {}),
+    },
+  };
 }
 
 export async function loadCaseHistory(

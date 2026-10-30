@@ -340,6 +340,7 @@ export async function runCalibration(options: {
       const result =
         saved ??
         (await generateValidatedCase({
+          independentReview: true,
           id: `gen-${crypto.randomUUID()}`,
           draw: item.draw,
           stages: item.stages,

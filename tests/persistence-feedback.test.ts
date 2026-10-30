@@ -162,6 +162,36 @@ function fakeClient(results: Result[]) {
 }
 
 describe("Private assessment persistence", () => {
+  it("saves and reloads automatic validation without inventing an independent review", async () => {
+    const f = fixture();
+    delete f.assessment.review;
+    f.assessment.validationMode = "automatic";
+    const writer = fakeClient([{ data: null, error: null }]);
+    await saveCaseWithAssessment(writer.client, { ...f, id, userId: owner, format: "long" });
+    const user = fakeClient([
+      { data: { id, user_id: owner, definition: f.definition }, error: null },
+    ]);
+    const admin = fakeClient([
+      {
+        data: {
+          case_id: id,
+          user_id: owner,
+          version: 3,
+          definition: f.definition,
+          assessment: f.assessment,
+        },
+        error: null,
+      },
+    ]);
+    const loaded = await loadOwnedAssessment(user.client, admin.client, owner, id);
+    assert.deepEqual(loaded.assessment, f.assessment);
+    assert.equal(assessmentContext(loaded.definition, loaded.assessment).tasks.length, 3);
+    delete f.assessment.validationMode;
+    await assert.rejects(
+      saveCaseWithAssessment(writer.client, { ...f, id, userId: owner, format: "long" }),
+    );
+    assert.equal(writer.calls.length, 1);
+  });
   it("saves via one atomic RPC with the diagnostic basis separate from student content", async () => {
     const f = fixture();
     const admin = fakeClient([{ data: null, error: null }]);

@@ -20,6 +20,7 @@ import { drawVariety, type VarietyDraw } from "./case-variety";
 import { publicDefinition } from "./generated-case";
 import { allQuestions, type CaseDefinition } from "./case-model";
 import { sourcesFor } from "./case-sources.server";
+import { generationProgress } from "./case-generation-progress";
 
 type Action = z.infer<typeof actionSchema>;
 type JobAction = Extract<Action, { action: "generate" | "assess" | "model" }>;
@@ -57,7 +58,15 @@ const cors = {
   "Cache-Control": "no-store",
 };
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: cors });
-const pending = (id: string) => json({ status: "pending", jobId: id, retryAfterMs: 2500 });
+const pending = (job: Job, needsNextRequest = false) =>
+  json({
+    status: "pending",
+    jobId: job.id,
+    retryAfterMs: 2500,
+    ...(job.kind === "generate"
+      ? { progress: generationProgress(job.steps, needsNextRequest) }
+      : {}),
+  });
 function safeError(error: unknown): string {
   if (error instanceof ApiFault || error instanceof AiProviderError) return error.message;
   if (
@@ -266,7 +275,12 @@ export function createCaseHandler(environment: () => Environment) {
         .maybeSingle();
       if (jobError || !found) throw new ApiFault(404, "Fant ikke en oppgave som tilhører deg.");
       const job = found as Job;
-      if (job.status === "completed") return json({ status: "completed", result: job.result });
+      if (job.status === "completed")
+        return json({
+          status: "completed",
+          result: job.result,
+          ...(job.kind === "generate" ? { progress: { phase: "completed" } } : {}),
+        });
       if (job.status === "failed")
         return json({ error: job.error ?? "Oppgaven kunne ikke fullføres." }, 422);
       if (Date.parse(job.expires_at) <= Date.now())
@@ -278,7 +292,7 @@ export function createCaseHandler(environment: () => Environment) {
         p_lease: lease,
       });
       if (claimError) throw new ApiFault(503, "Kunne ikke fortsette oppgaven.");
-      if (!claimed?.length) return pending(jobId);
+      if (!claimed?.length) return pending(job);
       const locked = claimed[0] as Job;
       const save = async (changes: Record<string, unknown>) => {
         const { data, error } = await jobs
@@ -363,11 +377,15 @@ export function createCaseHandler(environment: () => Environment) {
           lease_token: null,
           lease_until: null,
         });
-        return json({ status: "completed", result });
+        return json({
+          status: "completed",
+          result,
+          ...(locked.kind === "generate" ? { progress: { phase: "completed" } } : {}),
+        });
       } catch (error) {
         if (error instanceof PendingModel) {
           await save({ lease_token: null, lease_until: null });
-          return pending(jobId);
+          return pending(locked, error.needsNextRequest);
         }
         const message = safeError(error);
         await save({

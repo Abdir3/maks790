@@ -2,8 +2,18 @@ import type { JsonGenerator } from "./case-generation.server";
 import { AiProviderError, providerErrorFromResponse } from "./ai-gateway.server";
 
 export type ModelRequest = Parameters<JsonGenerator>[0];
-export type ModelStep = { hash: string; responseId?: string; output?: unknown; model?: string };
-export class PendingModel extends Error {}
+export type ModelStep = {
+  hash: string;
+  responseId?: string;
+  output?: unknown;
+  model?: string;
+  status?: "queued" | "in_progress" | "completed";
+};
+export class PendingModel extends Error {
+  constructor(readonly needsNextRequest = false) {
+    super();
+  }
+}
 
 export async function digest(value: unknown): Promise<string> {
   const bytes = await crypto.subtle.digest(
@@ -32,7 +42,7 @@ export function createBackgroundGenerator(options: {
     if (step && !step.responseId) throw new AiProviderError("unavailable");
     // Each Edge invocation performs at most one provider request, even if a
     // response finishes immediately. Completed steps are replayed from storage.
-    if (remoteCalls++ > 0) throw new PendingModel();
+    if (remoteCalls++ > 0) throw new PendingModel(true);
     const existingId = step?.responseId;
     if (existingId && !/^resp_[A-Za-z0-9_-]+$/.test(existingId))
       throw new AiProviderError("unavailable");
@@ -97,6 +107,7 @@ export function createBackgroundGenerator(options: {
       throw new AiProviderError("unavailable");
     step.responseId = body.id;
     if (body.status === "queued" || body.status === "in_progress") {
+      step.status = body.status;
       await options.save();
       throw new PendingModel();
     }
@@ -118,6 +129,7 @@ export function createBackgroundGenerator(options: {
       throw new AiProviderError("unavailable");
     }
     step.model = body.model;
+    step.status = "completed";
     await options.save();
     return step.output;
   };

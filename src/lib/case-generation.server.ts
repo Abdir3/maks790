@@ -36,6 +36,8 @@ export async function generateValidatedCase(args: {
   stages: number;
   recent: CaseDefinition[];
   generate: JsonGenerator;
+  // Extra model reviews are for offline calibration, never the interactive path.
+  independentReview?: boolean;
 }) {
   let issues: string[] = [];
   let rejected: GeneratedCase | undefined;
@@ -61,6 +63,16 @@ export async function generateValidatedCase(args: {
       issues = ["Casen er for lik et tidligere forløp."];
       continue;
     }
+    const assessment: Assessment = {
+      generated,
+      validationMode: args.independentReview ? "independent" : "automatic",
+      sourceVersion: SOURCE_VERSION,
+      sourceIds: args.draw.sourceIds,
+      createdAt: new Date().toISOString(),
+    };
+    // The same Astra draft, clinical prompt and deterministic checks are retained.
+    // A valid case is ready immediately; do not buy two more model responses.
+    if (!args.independentReview) return { definition, assessment, attempts: attempt + 1 };
     const solved = blindSolutionContract.validator.safeParse(
       await args.generate({
         instructions:
@@ -99,25 +111,23 @@ export async function generateValidatedCase(args: {
     return {
       definition,
       assessment: {
-        generated,
+        ...assessment,
         blindSolution: solved.data,
         review: reviewed.data,
-        sourceVersion: SOURCE_VERSION,
-        sourceIds: args.draw.sourceIds,
-        createdAt: new Date().toISOString(),
       },
       attempts: attempt + 1,
     };
   }
   // Do not reveal failed drafts or their diagnoses to the student.
   throw new Error(
-    "Casen bestod ikke kvalitetskontrollen etter to forsøk. Ingen case er lagret. Prøv et annet tema eller startsted.",
+    "Casen hadde ufullstendige eller motstridende opplysninger etter to forsøk. Ingen case er lagret. Prøv et annet tema eller startsted.",
   );
 }
 export type Assessment = {
   generated: GeneratedCase;
   blindSolution?: BlindSolution;
-  review: QualityReview;
+  review?: QualityReview;
+  validationMode?: "automatic" | "independent";
   sourceVersion: string;
   sourceIds: string[];
   createdAt: string;
