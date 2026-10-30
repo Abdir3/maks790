@@ -1,1 +1,6 @@
 project_id = "seqtqwpsellspkxhbeky"
+
+[functions.case-api]
+# The handler verifies the user's JWT with Supabase Auth before any operation.
+# This supports modern signing keys as well as legacy JWTs.
+verify_jwt = false

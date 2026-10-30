@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Landing } from "@/components/landing";
@@ -92,10 +91,10 @@ function Index() {
   const deleteRunning = useRef(false);
   const currentUserId = useRef(userId);
   currentUserId.current = userId;
-  const list = useServerFn(listMyCases);
-  const remove = useServerFn(deleteGeneratedCase);
-  const assess = useServerFn(assessCase);
-  const modelAnswer = useServerFn(getModelAnswer);
+  const list = listMyCases;
+  const remove = deleteGeneratedCase;
+  const assess = assessCase;
+  const modelAnswer = getModelAnswer;
   const saved = library.owner === userId ? library.items : [];
 
   const refresh = useCallback(() => {

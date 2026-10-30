@@ -1,14 +1,13 @@
-# Welcome to your Lovable project
+# MAKS790 case practice
 
-This project was built with [Lovable](https://lovable.dev).
+The site is published through Lovable. Supabase provides authentication, data
+storage and the application backend. AI requests go directly from Supabase to
+OpenAI.
 
-## Build with Lovable
+## Publishing
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+Push changes to GitHub `main`, let Lovable sync the repository, then publish the
+site there. Publishing the frontend does not deploy the Supabase function.
 
 ## Development
 
@@ -23,26 +22,36 @@ npm run dev
 
 ## AI connection
 
-Case generation, feedback and model answers use `gpt-6-astra` directly through
-the OpenAI Responses API. Usage is billed to the OpenAI project that issued
-`OPENAI_API_KEY`.
+The browser calls the `case-api` Supabase Edge Function with the signed-in user's
+JWT. That function validates the session and ownership before reading private
+assessments or making paid calls. Generation, feedback and model answers use
+`gpt-6-astra`; dictation uses `gpt-transcribe`. Usage is billed to the OpenAI
+project that issued `OPENAI_API_KEY`.
 
-Configure `OPENAI_API_KEY` as a secret in the deployed app's server runtime.
-Locally, provide it through the shell environment or an ignored `.env.local`.
-Keep the value out of the committed `.env`, browser variables (`VITE_*`), logs
-and Git. See [Lovable's Secrets documentation](https://docs.lovable.dev/features/secrets)
-for project secret configuration. Verify that the secret reaches the TanStack
-server functions before publishing.
+`OPENAI_API_KEY` belongs in **Supabase project secrets**. No AI key or privileged
+database key is required in Lovable. Keep credentials out of Git, browser
+variables (`VITE_*`) and logs. The committed `.env` contains public Supabase
+connection settings used by the published frontend.
 
-Preserve the existing `CASE_ASSESSMENT_KEY` and `LOVABLE_API_KEY`: stored case
-assessments are encrypted with the former, or with the latter as a legacy
-fallback. Changing or deleting the active encryption key makes those assessments
-unreadable. The AI client itself uses only `OPENAI_API_KEY` and fails explicitly
-if it is unavailable.
+Long Astra calls use OpenAI background responses with `store: false`. Supabase
+stores private checkpoints and leases each job to one request at a time. Polls
+resume the existing generation and quality checks; private drafts and rubrics
+remain on the backend. OpenAI temporarily retains background responses for
+polling, as described in its [background-mode documentation](https://developers.openai.com/api/docs/guides/background).
 
-After syncing the change, test a generated case, feedback and a model answer in
-the preview, then publish and verify the same flow on the published URL.
-Git synchronization alone does not update the published app.
+To update the backend, apply the tracked Supabase migrations, then run:
+
+```sh
+bun run build:edge
+npx supabase@2.122.0 functions deploy case-api --project-ref seqtqwpsellspkxhbeky --use-api
+```
+
+The generated `supabase/functions/_shared/case-api.js` bundles the same source
+modules tested locally. Rebuild it whenever those modules change. Environment
+injection is disabled during bundling. The function reads its key at runtime.
+
+For local PostgreSQL permission tests, set `PGLITE_TEST_MODULE` to an installed
+`@electric-sql/pglite` package directory before running `bun test tests/`.
 
 ## Built with
 

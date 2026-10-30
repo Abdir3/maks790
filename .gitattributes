@@ -1,0 +1,2 @@
+# Generated dependency bundles contain significant whitespace in string literals.
+supabase/functions/_shared/*.js linguist-generated -whitespace
