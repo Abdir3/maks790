@@ -47,81 +47,86 @@ export const SKILLS = [
   "disposition",
 ] as const;
 const eventTime = () => num(-525600, 10080);
-const medication = obj({
-  name: str(1, 160),
-  activeIngredient: str(1, 160),
-  dose: str(1, 120),
-  route: str(1, 100),
-  schedule: str(1, 200),
-  context: choice(["regular", "given", "reported"]),
-  timeMinutes: eventTime(),
-  sourceIds: arr(str(1, 80), 1, 4),
-});
-const laboratory = obj({
-  id: str(1, 80),
-  label: str(1, 160),
-  value: str(1, 500),
-  unit: str(0, 50),
-  referenceRange: str(1, 160),
-  sampleType: str(1, 100),
-  timeMinutes: eventTime(),
-});
-const bloodGas = obj({
-  sampleType: choice(["arterial", "venous"]),
-  sampledAt: str(1, 120),
-  oxygen: str(1, 200),
-  pH: num(6.5, 8),
-  pCO2: num(0.5, 25),
-  pO2: num(0.1, 100),
-  timeMinutes: eventTime(),
-});
-const report = obj({
-  kind: choice(["ecg", "imaging"]),
-  timeMinutes: eventTime(),
-  findings: str(1, 1800),
-  conclusion: str(1, 1200),
-});
+const medicationContract = (short: boolean) =>
+  obj({
+    name: str(1, short ? 70 : 160),
+    activeIngredient: str(1, short ? 70 : 160),
+    dose: str(1, short ? 60 : 120),
+    route: str(1, short ? 40 : 100),
+    schedule: str(1, short ? 70 : 200),
+    context: choice(["regular", "given", "reported"]),
+    timeMinutes: eventTime(),
+    sourceIds: arr(str(1, 80), 1, short ? 2 : 4),
+  });
+const laboratoryContract = (short: boolean) =>
+  obj({
+    id: str(1, short ? 40 : 80),
+    label: str(1, short ? 60 : 160),
+    value: str(1, short ? 60 : 500),
+    unit: str(0, short ? 24 : 50),
+    referenceRange: str(1, short ? 60 : 160),
+    sampleType: str(1, short ? 40 : 100),
+    timeMinutes: eventTime(),
+  });
+const bloodGasContract = (short: boolean) =>
+  obj({
+    sampleType: choice(["arterial", "venous"]),
+    sampledAt: str(1, short ? 60 : 120),
+    oxygen: str(1, short ? 80 : 200),
+    pH: num(6.5, 8),
+    pCO2: num(0.5, 25),
+    pO2: num(0.1, 100),
+    timeMinutes: eventTime(),
+  });
+const reportContract = (short: boolean) =>
+  obj({
+    kind: choice(["ecg", "imaging"]),
+    timeMinutes: eventTime(),
+    findings: str(1, short ? 280 : 1800),
+    conclusion: str(1, short ? 180 : 1200),
+  });
 function caseDraftContract(stageCount?: number) {
   // Saved assessments retain the original permissive contract. Only new model
   // requests use the concise contract: a short case must not spend its entire
   // response budget expanding private rubrics or writing unrequested stages.
   const compact = stageCount !== undefined;
+  const short = stageCount === 1;
   const limit = (original: number, concise: number) => (compact ? concise : original);
   const rubric = obj({
-    expected: arr(str(1, limit(3000, 320)), 2, 6),
-    alternatives: arr(str(1, limit(3000, 360)), 1, limit(4, 2)),
-    critical: arr(str(1, limit(3000, 240)), 0, limit(4, 3)),
-    sourceIds: arr(str(1, 80), 1, 6),
+    expected: arr(str(1, short ? 180 : limit(3000, 320)), 2, short ? 4 : 6),
+    alternatives: arr(str(1, short ? 200 : limit(3000, 360)), 1, limit(4, 2)),
+    critical: arr(str(1, short ? 160 : limit(3000, 240)), 0, short ? 2 : limit(4, 3)),
+    sourceIds: arr(str(1, 80), 1, short ? 3 : 6),
   });
   const question = obj({
-    prompt: str(20, limit(2000, 500)),
+    prompt: str(20, short ? 260 : limit(2000, 500)),
     skill: choice([...SKILLS]),
     temporalScope: choice(["at-time", "whole-case"]),
     rubric,
   });
   return obj({
-    patient: str(5, 300),
+    patient: str(5, short ? 60 : 300),
     ageYears: num(0, 110),
-    role: str(5, limit(600, 300)),
-    background: arr(str(1, limit(3000, 500)), 1, limit(8, 4)),
+    role: str(5, short ? 180 : limit(600, 300)),
+    background: arr(str(1, short ? 160 : limit(3000, 500)), 1, short ? 2 : limit(8, 4)),
     diagnosisFamily: str(2, 160),
-    diagnosisAliases: arr(str(2, 100), 1, 8),
-    mechanism: str(5, limit(600, 300)),
-    presentation: str(5, 400),
-    reasoningTarget: str(10, limit(600, 300)),
-    pivotalFindings: arr(str(5, limit(500, 240)), 2, 8),
-    dossier: str(30, limit(6000, stageCount === 1 ? 1000 : 1400)),
+    diagnosisAliases: arr(str(2, short ? 80 : 100), 1, short ? 3 : 8),
+    mechanism: str(5, short ? 160 : limit(600, 300)),
+    presentation: str(5, short ? 180 : 400),
+    reasoningTarget: str(10, short ? 180 : limit(600, 300)),
+    pivotalFindings: arr(str(5, short ? 140 : limit(500, 240)), 2, short ? 4 : 8),
+    dossier: str(30, short ? 400 : limit(6000, 1400)),
     stages: arr(
       obj({
-        setting: str(2, 120),
+        setting: str(2, short ? 80 : 120),
         elapsedMinutes: num(0, 10080),
-        timeLabel: str(2, 120),
-        paragraphs: arr(str(1, limit(3000, 600)), 1, limit(6, 4)),
-        clinicalFindings: arr(str(1, limit(3000, 300)), 1, 10),
-        medications: arr(medication, 0, 16),
-        laboratory: arr(laboratory, 0, 24),
-        bloodGas: arr(bloodGas, 0, 4),
-        reports: arr(report, 0, 6),
+        timeLabel: str(2, short ? 60 : 120),
+        paragraphs: arr(str(1, short ? 300 : limit(3000, 600)), 1, short ? 2 : limit(6, 4)),
+        clinicalFindings: arr(str(1, short ? 140 : limit(3000, 300)), 1, short ? 5 : 10),
+        medications: arr(medicationContract(short), 0, short ? 6 : 16),
+        laboratory: arr(laboratoryContract(short), 0, short ? 14 : 24),
+        bloodGas: arr(bloodGasContract(short), 0, short ? 2 : 4),
+        reports: arr(reportContract(short), 0, short ? 2 : 6),
         vitals: arr(
           obj({
             id: choice([
@@ -137,9 +142,9 @@ function caseDraftContract(stageCount?: number) {
               "capillaryRefill",
               "weight",
             ]),
-            value: str(1, 160),
-            unit: str(0, 30),
-            note: str(0, 300),
+            value: str(1, short ? 60 : 160),
+            unit: str(0, short ? 24 : 30),
+            note: str(0, short ? 80 : 300),
           }),
           0,
           11,
